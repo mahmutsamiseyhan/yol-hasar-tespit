@@ -33,8 +33,22 @@ mkdir -p ~/.ssh && echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH5B+5iUvTgC8kOmWcR
 İşiniz bitince bu anahtarı silerek erişimi kapatabilirsiniz (`~/.ssh/authorized_keys` dosyasından ilgili satır).
 
 ## 3. Adres (alan adı)
-- **Ücretsiz, hemen:** `IP-adresi.sslip.io` (ör. IP `185.10.20.30` ise `185-10-20-30.sslip.io`). Ek ayar gerekmez.
-- **Daha profesyonel:** kendi alan adınız (ör. `yolhasari.com`). Alan adı panelinde bir **A kaydı** ile sunucu IP'sine yönlendirin.
+- **Ücretsiz, hemen:** `IP-adresi.sslip.io` (ör. IP `185.10.20.30` ise `185-10-20-30.sslip.io`). Ek ayar gerekmez. Alan adı hazır olana kadar bununla başlanır.
+- **Kendi alan adınız** (ör. `yolhasari.com.tr`): alan adının sunucu IP'sini gösteren bir **A kaydı** olmalı.
+
+### Alan adı panelinde yalnızca "Name Server" ayarı varsa (A kaydı eklenemiyorsa)
+DNS kayıtlarını ücretsiz **Cloudflare DNS** ile yönetin:
+1. https://dash.cloudflare.com adresinde ücretsiz hesap açın → **Add a domain** → alan adını yazın → **Free** planı seçin.
+2. **DNS → Records** bölümünde iki kayıt ekleyin. Proxy durumu **DNS only (gri bulut)** olsun; HTTPS sertifikasını sunucudaki Caddy alır.
+
+   | Type | Name | IPv4 address | Proxy status |
+   |---|---|---|---|
+   | A | `@` | sunucu IP'si | DNS only |
+   | A | `www` | sunucu IP'si | DNS only |
+3. Cloudflare size iki name server verir (ör. `xxx.ns.cloudflare.com`, `yyy.ns.cloudflare.com`). Alan adı panelinde **Name Server Güncelle** bölümüne bu ikisini yazın (eski `ns1/ns2` yerine), **NS Güncelle**.
+4. `.tr` alan adlarında kayıt sisteminin (TRABIS) değişikliği işlemesi birkaç saat sürebilir. Cloudflare alan adını "Active" gösterdiğinde hazırdır.
+
+Alternatif: Alan adı firmasının destek hattından kendi DNS sunucularında alan adınız için bir A kaydı açmalarını isteyin.
 
 ## 4. Kurulum (benim adımım)
 Sunucu IP'sini ve seçtiğiniz adresi verdiğinizde:

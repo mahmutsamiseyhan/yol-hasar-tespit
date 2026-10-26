@@ -1,5 +1,6 @@
 # Üretim / genel erişimli kurulum: uygulama + otomatik HTTPS (Caddy)
-# Kullanım (deploy/ klasöründe, .env içinde DOMAIN tanımlıyken):
+# Kullanım (deploy/ klasöründe, .env içinde DOMAIN ve PUBLIC_URL tanımlıyken):
+# DOMAIN birden çok adres olabilir: "ornek.com, www.ornek.com, 1-2-3-4.sslip.io"
 #   docker compose -f docker-compose.prod.yml up -d --build
 services:
   api:
@@ -9,7 +10,7 @@ services:
       MODEL_DIR: /app/models/custom
       DATA_DIR: /app/data/runtime
       DB_PATH: /app/data/runtime/yol_hasar.db
-      PUBLIC_URL: https://${DOMAIN}
+      PUBLIC_URL: ${PUBLIC_URL}       # QR kodda gösterilen adres
       ENABLE_LABELING: "0"           # etiket aracı internete açılmaz
       UPLOAD_LIMIT_PER_MIN: "20"
       OMP_NUM_THREADS: "2"           # küçük sunucuda CPU'yu boğmasın

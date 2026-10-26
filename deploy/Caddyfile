@@ -1,4 +1,5 @@
-# Otomatik HTTPS: Caddy, DOMAIN için Let's Encrypt sertifikasını kendisi alır ve yeniler.
+# Otomatik HTTPS: Caddy, DOMAIN'deki her adres için Let's Encrypt sertifikasını kendisi alır ve yeniler.
+# DOMAIN virgülle ayrılmış birden çok adres olabilir.
 {$DOMAIN} {
 	encode zstd gzip
 	request_body {
