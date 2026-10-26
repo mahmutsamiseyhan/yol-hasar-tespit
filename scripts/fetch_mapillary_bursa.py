@@ -6,7 +6,7 @@ oluşturulur, ardından CVAT/Roboflow'da etiketlenir. Mapillary yüz ve plakalar
 yükleme sırasında otomatik bulanıklaştırır.
 
 Gereken: ücretsiz Mapillary hesabı -> https://www.mapillary.com/dashboard/developers
-         "Client Token" değerini MAPILLARY_TOKEN ortam değişkenine koyun.
+         "Client Token" değerini MAPILLARY_TOKEN ortam değişkenine veya proje kökündeki .env dosyasına koyun.
 
 Kullanım:
     MAPILLARY_TOKEN=MLY|... python scripts/fetch_mapillary_bursa.py --per-cell 15 --out data/bursa_test/mapillary
@@ -59,6 +59,16 @@ def query(token: str, cell, limit: int = 500, since: str | None = None) -> list[
         return json.loads(resp.read()).get("data", [])
 
 
+def _token_from_env_file(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "MAPILLARY_TOKEN" and value.strip():
+            return value.strip().strip("'\"")
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=Path("data/bursa_test/mapillary"))
@@ -68,9 +78,10 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
-    token = os.getenv("MAPILLARY_TOKEN")
+    token = os.getenv("MAPILLARY_TOKEN") or _token_from_env_file(Path(__file__).resolve().parent.parent / ".env")
     if not token:
-        raise SystemExit("MAPILLARY_TOKEN ortam değişkeni gerekli (https://www.mapillary.com/dashboard/developers)")
+        raise SystemExit("MAPILLARY_TOKEN gerekli: ortam değişkeni olarak verin veya .env dosyasına yazın "
+                         "(https://www.mapillary.com/dashboard/developers)")
 
     rng = random.Random(args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
