@@ -3,7 +3,7 @@ services:
     build: .
     image: yol-hasar-tespit:latest
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"        # başka port için: PORT=8001 docker compose up
     env_file:
       - path: .env
         required: false

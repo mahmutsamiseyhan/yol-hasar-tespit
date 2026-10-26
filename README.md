@@ -94,12 +94,21 @@ Notebook sunum için gereken grafikleri de üretir: sınıf dağılımı, eğiti
 
 ### 2. Docker ile çalıştırın
 
+`models/best.pt` dosyası yerindeyken:
+
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
 Arayüz: http://localhost:8000 · API dokümantasyonu: http://localhost:8000/docs
+
+- İlk derleme ~3,5 dakika sürer; imaj ~2,6 GB'tır (CPU sürümü PyTorch). Sonraki açılışlar birkaç saniyedir.
+- KVKK maskeleme modelleri (yüz, kişi/araç) imaja gömülüdür; çalışırken internet gerekmez. Yalnızca harita karoları internetten gelir.
+- Hasar modeli imaja girmez, `models/` klasöründen bağlanır: yeni model için imajı yeniden derlemek gerekmez.
+- Veritabanı ve maskelenmiş görseller `yol_hasar_data` biriminde (volume) tutulur; konteyner yeniden başlasa da korunur.
+- 8000 portu doluysa: `PORT=8001 docker compose up`
+- Docker Desktop + WSL2 üzerinde test edildi: sağlık kontrolü, uçtan uca demo akışı (tarayıcı testi) ve yeniden başlatmada veri kalıcılığı.
 
 ### 3. Docker olmadan (geliştirme)
 
