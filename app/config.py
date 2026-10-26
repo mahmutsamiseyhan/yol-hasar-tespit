@@ -53,6 +53,8 @@ DEFAULT_ROAD_WEIGHTS = {
 class Settings:
     model_path: Path = field(default_factory=lambda: Path(os.getenv("MODEL_PATH") or _default_model()))
     conf_threshold: float = field(default_factory=lambda: _env_float("CONF_THRESHOLD", 0.35))
+    # Bu değer ile güven eşiği arasındaki tespitler kayıt açmaz, analiz raporunda "zayıf aday" olarak gösterilir
+    candidate_conf: float = field(default_factory=lambda: _env_float("CANDIDATE_CONF", 0.10))
     iou_threshold: float = field(default_factory=lambda: _env_float("IOU_THRESHOLD", 0.5))
     imgsz: int = field(default_factory=lambda: int(os.getenv("IMGSZ", 640)))
 

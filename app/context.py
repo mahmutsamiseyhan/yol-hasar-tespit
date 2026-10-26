@@ -48,6 +48,10 @@ class RoadContext:
                 self._pois.append(Point(self.proj(*geom["coordinates"])))
                 self._poi_props.append(props)
         self._road_tree = STRtree(self._roads) if self._roads else None
+        # Bağlam verisinin kapsadığı alan (enlem/boylam kutusu); dışındaki noktalarda yol sınıfı bilinmez
+        lons = [c[0] for f in feats for c in _coords(f["geometry"])]
+        lats = [c[1] for f in feats for c in _coords(f["geometry"])]
+        self.bounds = (min(lats), min(lons), max(lats), max(lons)) if lats else None
         self._poi_tree = STRtree(self._pois) if self._pois else None
 
     @classmethod
@@ -60,6 +64,12 @@ class RoadContext:
     @property
     def loaded(self) -> bool:
         return bool(self._roads)
+
+    def covers(self, lat: float, lon: float) -> bool:
+        if self.bounds is None:
+            return False
+        s, w, n, e = self.bounds
+        return s <= lat <= n and w <= lon <= e
 
     def lookup(self, lat: float, lon: float) -> dict:
         pt = Point(self.proj(lon, lat))
@@ -95,7 +105,12 @@ class RoadContext:
             "yol_katsayisi": road_weight,
             "yakin_kritik_tesisler": nearby[:3],
             "konum_katsayisi": round(weight, 3),
+            "veri_kapsaminda": self.covers(lat, lon),
         }
+
+
+def _coords(geom: dict) -> list:
+    return [geom["coordinates"]] if geom["type"] == "Point" else geom["coordinates"]
 
 
 def _mean_lat(features: list[dict]) -> float | None:

@@ -35,6 +35,20 @@
   .lvl-kritik { background: var(--kritik); } .lvl-yuksek { background: var(--yuksek); }
   .lvl-orta { background: var(--orta); color: #222; } .lvl-dusuk { background: var(--dusuk); }
   .result img, .popup img { width: 100%; border-radius: 6px; border: 1px solid var(--line); margin: 8px 0; }
+  .report h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 14px 0 6px; }
+  .report ul { margin: 0; padding-left: 0; list-style: none; font-size: 13px; }
+  .report li { padding: 5px 8px 5px 26px; border-radius: 6px; margin-bottom: 4px; position: relative; background: #f6f8fb; }
+  .report li::before { position: absolute; left: 8px; top: 5px; font-weight: 700; }
+  .report li.n-karar { background: #e8f1fb; } .report li.n-karar::before { content: "▸"; color: #0b5394; }
+  .report li.n-bilgi::before { content: "i"; color: #5f6b7a; font-style: italic; }
+  .report li.n-uyari { background: #fff4e5; } .report li.n-uyari::before { content: "!"; color: #8a4b00; }
+  .report table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .report th, .report td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .report th { color: var(--muted); font-weight: 600; }
+  .legend-line { font-size: 11px; color: var(--muted); margin-top: -4px; }
+  .live { font-size: 11px; opacity: .85; display: flex; align-items: center; gap: 6px; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: #69f0ae; display: inline-block; box-shadow: 0 0 0 0 rgba(105,240,174,.7); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(105,240,174,.7); } 70% { box-shadow: 0 0 0 8px rgba(105,240,174,0); } 100% { box-shadow: 0 0 0 0 rgba(105,240,174,0); } }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
   .kv span:nth-child(odd) { color: var(--muted); }
   .notice { padding: 8px 10px; border-radius: 6px; font-size: 13px; margin: 8px 0; }
@@ -59,6 +73,7 @@
     <div class="sub">Görüntü işleme + CBS ile hasar tespiti, önceliklendirme ve iş emri</div>
   </div>
   <div class="stats" id="stats"></div>
+  <div class="live" title="Harita ve iş kuyruğu 15 saniyede bir yenilenir"><i></i><span id="liveText">Canlı</span></div>
 </header>
 <main>
   <aside>
@@ -101,6 +116,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19, attribution: "© OpenStreetMap katkıcıları"
 }).addTo(map);
 const layer = L.layerGroup().addTo(map);
+const layerAnalysis = L.layerGroup().addTo(map);
+const $live = document.getElementById("liveText");
 const markers = {};
 let pickMarker = null;
 
@@ -175,6 +192,7 @@ async function loadIssues() {
   }
   renderQueue(open);
   loadStats();
+  $live.textContent = "Canlı · " + new Date().toLocaleTimeString("tr-TR");
 }
 
 function renderQueue(features) {
@@ -228,10 +246,7 @@ document.getElementById("form").addEventListener("submit", async (e) => {
     if (!res.ok) throw new Error(data.detail || "Analiz başarısız");
     out.innerHTML = renderResult(data);
     await loadIssues();
-    if (data.ariza) {
-      const m = markers[data.ariza.properties.id];
-      map.setView(m.getLatLng(), 17); m.openPopup();
-    }
+    showAnalysisPoint(data);
   } catch (err) {
     out.innerHTML = `<div class="notice err">${esc(err.message)}</div>`;
   } finally {
@@ -239,21 +254,86 @@ document.getElementById("form").addEventListener("submit", async (e) => {
   }
 });
 
-function renderResult(d) {
-  const kvkk = `<div class="notice info">KVKK: ${d.kvkk.maskelenen_bolge} bölge maskelendi (${d.kvkk.aktif_dedektorler.join(", ") || "dedektör yok"}). Ham görüntü saklanmadı.</div>`;
-  if (!d.hasar_tespit_edildi) return `<div class="notice ok">Bu görüntüde hasar tespit edilmedi.</div>${kvkk}`;
-  const p = d.ariza.properties;
-  const dets = d.tespitler.map((t) => `<span>${esc(t.ad)}</span><span>güven %${Math.round(t.guven * 100)} · şiddet ${t.siddet}</span>`).join("");
-  return `
-    ${d.mevcut_kayitla_birlestirildi
-      ? `<div class="notice warn">15 m içinde açık kayıt bulundu: yeni iş emri açılmadı, mevcut kayıt güncellendi (${p.bildirim_sayisi}. bildirim).</div>`
-      : `<div class="notice ok">Yeni arıza kaydı açıldı: ${esc(p.is_emri_no)}</div>`}
-    ${d.kritik_oncelik ? `<div class="notice err">Kritik öncelik: ${esc(p.is_emri_no)} iş kuyruğunun en üstünde.</div>` : ""}
-    <div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>
-    <img src="${esc(d.goruntu_url)}" alt="İşaretlenmiş görüntü">
-    <div class="kv">${dets}<span>Yol</span><span>${roadText(p)}</span><span>Konum kaynağı</span><span>${d.konum.kaynak === "exif" ? "Fotoğraf GPS (EXIF)" : "Harita / istek"}</span></div>
-    ${kvkk}`;
+const NOTE_ORDER = { karar: 0, uyari: 1, bilgi: 2 };
+const MODE_TR = { "tam_kare": "Tam kare", "tam_kare+yol_bolgesi": "Tam kare + yol bölgesi (dikey fotoğraf)" };
+const pct = (v) => `%${Math.round(v * 100)}`;
+let analysisMarker = null;
+
+function flyAndOpen(latlng, layer) {
+  // Harita zaten oradaysa uçuş olmaz ve "moveend" gelmez: pencereyi doğrudan aç
+  if (map.getZoom() === 17 && map.getCenter().distanceTo(latlng) < 5) { layer.openPopup(); return; }
+  map.once("moveend", () => layer.openPopup());
+  map.flyTo(latlng, 17, { duration: 0.8 });
 }
+
+function showAnalysisPoint(d) {
+  const lat = d.konum.enlem, lon = d.konum.boylam;
+  if (analysisMarker) layerAnalysis.removeLayer(analysisMarker);
+  if (pickMarker) { map.removeLayer(pickMarker); pickMarker = null; }
+  if (d.ariza) {
+    const m = markers[d.ariza.properties.id];
+    flyAndOpen(m.getLatLng(), m);
+    return;
+  }
+  const karar = (d.degerlendirme || []).find((n) => n.tur === "karar");
+  analysisMarker = L.circleMarker([lat, lon], { radius: 10, color: "#0b5394", weight: 2, dashArray: "4 3", fillColor: "#2e7d32", fillOpacity: 0.35 })
+    .bindPopup(`<div class="popup"><h3>Son analiz: hasar yok</h3>${d.onizleme ? `<img src="${d.onizleme}" alt="Analiz önizlemesi">` : ""}<div style="font-size:12px">${esc(karar ? karar.metin : "")}</div></div>`, { maxWidth: 290 })
+    .addTo(layerAnalysis);
+  flyAndOpen(L.latLng(lat, lon), analysisMarker);
+}
+
+function renderResult(d) {
+  const a = d.analiz || {}, g = a.goruntu || {}, ctx = a.konum_baglami || {};
+  const kvkk = `<div class="notice info">KVKK: ${d.kvkk.maskelenen_bolge} bölge maskelendi (${d.kvkk.aktif_dedektorler.join(", ") || "dedektör yok"}). Ham görüntü saklanmadı.</div>`;
+  let head;
+  if (!d.hasar_tespit_edildi) {
+    head = `<div class="notice ok">Bu görüntüde hasar tespit edilmedi.</div>`;
+  } else {
+    const p = d.ariza.properties;
+    head = (d.mevcut_kayitla_birlestirildi
+      ? `<div class="notice warn">15 m içinde açık kayıt bulundu: yeni iş emri açılmadı, mevcut kayıt güncellendi (${p.bildirim_sayisi}. bildirim).</div>`
+      : `<div class="notice ok">Yeni arıza kaydı açıldı: ${esc(p.is_emri_no)}</div>`)
+      + (d.kritik_oncelik ? `<div class="notice err">Kritik öncelik: ${esc(p.is_emri_no)} iş kuyruğunun en üstünde.</div>` : "")
+      + `<div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>`;
+  }
+  const img = d.onizleme || d.goruntu_url;
+  const notes = (d.degerlendirme || []).slice().sort((x, y) => NOTE_ORDER[x.tur] - NOTE_ORDER[y.tur])
+    .map((n) => `<li class="n-${n.tur}">${esc(n.metin)}</li>`).join("");
+  const detRows = (d.tespitler || []).map((t) => `<tr><td>${esc(t.ad)}</td><td>${pct(t.guven)}</td><td>${t.siddet}</td><td>${t.boyut_olcusu || "-"}</td></tr>`).join("");
+  const candRows = (a.esik_alti_adaylar || []).map((t) => `<tr><td>${esc(t.ad)}</td><td>${pct(t.guven)}</td><td colspan="2">eşik altı, kayıt yok</td></tr>`).join("");
+  const pois = (ctx.yakin_kritik_tesisler || []).map((t) => `${esc(t.tur)}${t.ad ? " (" + esc(t.ad) + ")" : ""} ${t.mesafe_m} m`).join(", ") || "yok";
+  return `<div class="report">
+    ${head}
+    ${img ? `<img src="${esc(img)}" alt="Analiz görüntüsü"><div class="legend-line">Renkli çerçeve: tespit edilen hasar · Gri kesik çerçeve: eşik altı zayıf aday</div>` : ""}
+    <h3>Değerlendirme</h3><ul>${notes}</ul>
+    ${detRows || candRows ? `<h3>Model çıktısı</h3><table><tr><th>Sınıf</th><th>Güven</th><th>Şiddet</th><th>Ölçü</th></tr>${detRows}${candRows}</table>` : ""}
+    <h3>Konum</h3>
+    <div class="kv">
+      <span>Koordinat</span><span>${d.konum.enlem.toFixed(6)}, ${d.konum.boylam.toFixed(6)} (${d.konum.kaynak === "exif" ? "fotoğraf GPS" : "harita / elle"})</span>
+      <span>Yol</span><span>${roadText(ctx)}</span>
+      <span>Yakında</span><span>${pois}</span>
+      <span>Konum katsayısı</span><span>${ctx.konum_katsayisi ?? "-"}${ctx.veri_kapsaminda === false ? " (veri kapsamı dışında)" : ""}</span>
+    </div>
+    <h3>Teknik</h3>
+    <div class="kv">
+      <span>Model</span><span>${esc(a.model || "-")} · güven eşiği ${a.guven_esigi ?? "-"} · aday eşiği ${a.aday_esigi ?? "-"}</span>
+      <span>Analiz modu</span><span>${MODE_TR[a.analiz_modu] || "-"}</span>
+      <span>Görüntü</span><span>${g.genislik || "-"}×${g.yukseklik || "-"} px, ${g.yon || "-"}</span>
+      <span>Işık</span><span>${g.isik === "dusuk" ? "düşük" : "yeterli"} (parlaklık ${g.parlaklik ?? "-"}/255)</span>
+      <span>Süre</span><span>${a.sure_ms ?? "-"} ms</span>
+    </div>
+    ${kvkk}
+  </div>`;
+}
+
+// Canlı güncelleme: açık bir pencere yokken harita ve kuyruk 15 saniyede bir yenilenir
+let popupOpen = false;
+map.on("popupopen", () => (popupOpen = true));
+map.on("popupclose", () => (popupOpen = false));
+setInterval(async () => {
+  if (document.hidden || popupOpen) return;
+  try { await loadIssues(); } catch (_) { /* bağlantı geçici olarak koptuysa sonraki turda tekrar dener */ }
+}, 15000);
 
 loadIssues();
 </script>

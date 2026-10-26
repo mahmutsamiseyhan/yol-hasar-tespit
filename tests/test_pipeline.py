@@ -133,3 +133,35 @@ def test_retention_purges_closed_issue_images(make_pipeline, settings):
     assert not image.exists()
     assert pl.repo.get_issue(p["id"])["image_path"] is None
 
+
+
+def test_no_damage_report_explains_candidates_location_and_quality(make_pipeline):
+    from app.detector import Detection
+
+    weak = Detection("D40", 0.14, (500, 300, 600, 350))  # eşik (0.35) altında
+    pl = make_pipeline(detections=[weak])
+    res = pl.analyze(jpeg_bytes(), LAT, LON)
+    assert res["hasar_tespit_edildi"] is False and res["ariza"] is None
+    a = res["analiz"]
+    assert a["esik_alti_adaylar"][0]["sinif"] == "D40" and a["esik_alti_adaylar"][0]["guven"] == 0.14
+    assert a["konum_baglami"]["yol_sinifi"] == "primary" and a["konum_baglami"]["veri_kapsaminda"] is True
+    assert a["goruntu"]["yon"] == "yatay" and a["goruntu"]["isik"] in ("yeterli", "dusuk")
+    assert a["guven_esigi"] == 0.35 and isinstance(a["sure_ms"], int)
+    assert res["onizleme"].startswith("data:image/jpeg;base64,")
+    karar = [n["metin"] for n in res["degerlendirme"] if n["tur"] == "karar"][0]
+    assert "zayıf aday" in karar and "%14" in karar
+
+
+def test_report_warns_when_location_outside_context_data(make_pipeline):
+    pl = make_pipeline(detections=[])
+    res = pl.analyze(jpeg_bytes(), 39.0, 32.0)  # Ankara civarı: Bursa verisinin dışı
+    assert res["analiz"]["konum_baglami"]["veri_kapsaminda"] is False
+    assert any("kapsadığı" in n["metin"] for n in res["degerlendirme"] if n["tur"] == "uyari")
+
+
+def test_damage_report_includes_priority_explanation(make_pipeline):
+    pl = make_pipeline(detections=[BIG_POTHOLE])
+    res = pl.analyze(jpeg_bytes(), LAT, LON)
+    texts = " ".join(n["metin"] for n in res["degerlendirme"])
+    assert "Öncelik" in texts and res["ariza"]["properties"]["is_emri_no"] in texts
+    assert res["onizleme"].startswith("data:image/jpeg")

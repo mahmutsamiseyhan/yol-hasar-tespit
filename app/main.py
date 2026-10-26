@@ -30,7 +30,7 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 def build_pipeline(settings: Settings) -> RoadDamagePipeline:
     return RoadDamagePipeline(
         settings=settings,
-        detector=YoloDetector(settings.model_path, settings.conf_threshold, settings.iou_threshold, settings.imgsz),
+        detector=YoloDetector(settings.model_path, settings.candidate_conf, settings.iou_threshold, settings.imgsz),
         masker=build_default_masker(ROOT_DIR / "models", settings.privacy_model_path),
         context=RoadContext.from_file(
             settings.context_path,
