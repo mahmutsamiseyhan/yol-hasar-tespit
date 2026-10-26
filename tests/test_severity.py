@@ -83,23 +83,14 @@ def test_same_pothole_main_road_beats_side_street():
     assert main > side
 
 
-def test_polygon_area_is_used_instead_of_box():
-    box = (100, 100, 160, 160)
-    triangle = [(100, 100), (160, 100), (100, 160)]  # kutunun yarısı
-    boxed = estimate_size(Detection("D40", 0.9, box), W, H)
-    shaped = estimate_size(Detection("D40", 0.9, box, polygon=triangle), W, H)
-    assert shaped.shape == "cokgen" and boxed.shape == "kutu"
-    assert shaped.factor == pytest.approx(boxed.factor / 2 ** 0.5, rel=1e-3)
-
-
-def test_cracks_are_measured_by_length():
-    # Çapraz uzanan ince bir çatlak: alanı küçük, uzunluğu büyük
-    crack = [(50, 50), (53, 48), (560, 425), (557, 427)]
-    size = estimate_size(Detection("D00", 0.9, (50, 45, 560, 430), polygon=crack), W, H)
-    assert size.measure == "uzunluk" and size.method == "uzunluk_orani"
-    assert size.factor > 0.9  # görüntü köşegeninin büyük kısmı
-    pothole = estimate_size(Detection("D40", 0.9, (50, 45, 560, 430), polygon=crack), W, H)
-    assert pothole.measure == "alan" and pothole.factor < 0.5
+def test_cracks_are_measured_by_length_not_area():
+    # Uzun ve ince bir boyuna çatlak kutusu: alanı küçük, uzunluğu büyük
+    box = (300, 20, 308, 460)
+    crack = estimate_size(Detection("D00", 0.9, box), W, H)
+    assert crack.measure == "uzunluk" and crack.method == "uzunluk_orani"
+    assert crack.factor > 0.9
+    pothole = estimate_size(Detection("D40", 0.9, box), W, H)
+    assert pothole.measure == "alan" and pothole.factor < 0.6
 
 
 def test_crack_length_in_meters_with_homography():

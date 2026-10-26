@@ -32,8 +32,7 @@ CREATE TABLE IF NOT EXISTS issues (
     status        TEXT NOT NULL DEFAULT 'acik',
     image_path    TEXT,
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL,
-    notified_at   TEXT
+    updated_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_issues_latlon ON issues(lat, lon);
 CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);

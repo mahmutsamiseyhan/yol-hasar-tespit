@@ -8,7 +8,6 @@ Model güven skoru şiddete katılmaz; yalnızca eşik (filtre) olarak kullanıl
 Boyut, hasarın türüne göre ölçülür:
   - Çatlaklar (D00, D10): uzunluk. İnce bir çatlağın alanı küçüktür ama tehlikesi uzunluğundadır.
   - Timsah sırtı ve çukur (D20, D40): alan.
-Segmentasyon modelinde ölçü hasarın gerçek sınırından (çokgen), tespit modelinde kutudan alınır.
 Kalibre araç kamerasında (homografi) metre / m², diğer durumlarda görüntüye oranla hesaplanır.
 """
 
@@ -42,7 +41,6 @@ class SizeEstimate:
     area_m2: float | None = None
     length_m: float | None = None
     measure: str = "alan"  # "alan" | "uzunluk"
-    shape: str = "kutu"  # "cokgen" | "kutu": ölçü hasarın sınırından mı, kutudan mı alındı
 
 
 def to_ground(pts: np.ndarray, homography: list) -> np.ndarray:
@@ -67,20 +65,19 @@ def longest_extent(pts: np.ndarray) -> float:
 
 def estimate_size(det: Detection, img_w: int, img_h: int, homography: list | None = None) -> SizeEstimate:
     pts = det.outline
-    shape = "cokgen" if det.polygon else "kutu"
     if det.cls in LENGTH_CLASSES:
         if homography is not None:
             length = longest_extent(to_ground(pts, homography))
             return SizeEstimate(min(1.0, length / REF_LENGTH_M), "kalibrasyon", length_m=round(length, 2),
-                                measure="uzunluk", shape=shape)
+                                measure="uzunluk")
         ratio = longest_extent(pts) / math.hypot(img_w, img_h)
-        return SizeEstimate(min(1.0, ratio / REF_LENGTH_RATIO), "uzunluk_orani", measure="uzunluk", shape=shape)
+        return SizeEstimate(min(1.0, ratio / REF_LENGTH_RATIO), "uzunluk_orani", measure="uzunluk")
     if homography is not None:
         area = polygon_area(to_ground(pts, homography))
-        return SizeEstimate(min(1.0, math.sqrt(area / REF_AREA_M2)), "kalibrasyon", round(area, 3), shape=shape)
+        return SizeEstimate(min(1.0, math.sqrt(area / REF_AREA_M2)), "kalibrasyon", round(area, 3))
     ratio = det.area / float(img_w * img_h)
     # Alan karesel büyüdüğü için karekök alınır: boyut katsayısı doğrusal ölçüye yakın davranır
-    return SizeEstimate(min(1.0, math.sqrt(ratio / REF_AREA_RATIO)), "alan_orani", shape=shape)
+    return SizeEstimate(min(1.0, math.sqrt(ratio / REF_AREA_RATIO)), "alan_orani")
 
 
 def detection_severity(det: Detection, size: SizeEstimate, class_weights: dict) -> float:

@@ -15,10 +15,7 @@ def _env_float(name: str, default: float) -> float:
 
 
 def _default_model() -> Path:
-    """Segmentasyon modeli (hasarın gerçek sınırı) varsa onu, yoksa tespit modelini kullanır."""
-    models = Path(os.getenv("MODEL_DIR", ROOT_DIR / "models"))
-    seg = models / "best-seg.pt"
-    return seg if seg.exists() else models / "best.pt"
+    return Path(os.getenv("MODEL_DIR", ROOT_DIR / "models")) / "best.pt"
 
 
 def _env_json(name: str, default):
@@ -71,9 +68,6 @@ class Settings:
 
     # Mükerrer kayıt birleştirme yarıçapı (metre)
     merge_radius_m: float = field(default_factory=lambda: _env_float("MERGE_RADIUS_M", 15.0))
-    # Bu öncelik puanını geçen arızalar için webhook tetiklenir
-    critical_threshold: float = field(default_factory=lambda: _env_float("CRITICAL_THRESHOLD", 70.0))
-    webhook_url: str | None = field(default_factory=lambda: os.getenv("WEBHOOK_URL") or None)
 
     # KVKK: kapatılan arızaların görselleri bu süre sonunda silinir
     retention_days: int = field(default_factory=lambda: int(os.getenv("RETENTION_DAYS", 90)))

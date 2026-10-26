@@ -8,11 +8,11 @@ services:
       - path: .env
         required: false
     environment:
-      MODEL_DIR: /app/models/custom          # best-seg.pt varsa o, yoksa best.pt kullanılır
+      MODEL_DIR: /app/models/custom
       DATA_DIR: /app/data/runtime
       DB_PATH: /app/data/runtime/yol_hasar.db
     volumes:
-      - ./models:/app/models/custom:ro            # Colab'da eğitilen best.pt / best-seg.pt
+      - ./models:/app/models/custom:ro            # Colab'da eğitilen best.pt buraya
       - yol_hasar_data:/app/data/runtime          # veritabanı + maskelenmiş görseller
     restart: unless-stopped
 

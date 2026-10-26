@@ -248,7 +248,7 @@ function renderResult(d) {
     ${d.mevcut_kayitla_birlestirildi
       ? `<div class="notice warn">15 m içinde açık kayıt bulundu: yeni iş emri açılmadı, mevcut kayıt güncellendi (${p.bildirim_sayisi}. bildirim).</div>`
       : `<div class="notice ok">Yeni arıza kaydı açıldı: ${esc(p.is_emri_no)}</div>`}
-    ${d.is_emri_tetiklendi ? `<div class="notice err">Kritik eşik aşıldı: Fen İşleri'ne iş emri gönderiliyor.</div>` : ""}
+    ${d.kritik_oncelik ? `<div class="notice err">Kritik öncelik: ${esc(p.is_emri_no)} iş kuyruğunun en üstünde.</div>` : ""}
     <div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>
     <img src="${esc(d.goruntu_url)}" alt="İşaretlenmiş görüntü">
     <div class="kv">${dets}<span>Yol</span><span>${roadText(p)}</span><span>Konum kaynağı</span><span>${d.konum.kaynak === "exif" ? "Fotoğraf GPS (EXIF)" : "Harita / istek"}</span></div>

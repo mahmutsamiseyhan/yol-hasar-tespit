@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -78,16 +78,13 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         return {
             "durum": "ok",
             "model_yuklu": getattr(detector, "available", True),
-            "model_turu": "segmentasyon" if "seg" in str(getattr(detector, "model_path", "")) else "tespit",
             "model_yolu": str(getattr(detector, "model_path", "")),
             "kvkk_dedektorleri": [d.name for d in pl.masker.detectors],
             "konum_baglami_yuklu": pl.context.loaded,
-            "webhook_tanimli": bool(pl.settings.webhook_url),
         }
 
     @app.post("/api/analyze-road")
     async def analyze_road(
-        background: BackgroundTasks,
         image: UploadFile = File(..., description="Yol fotoğrafı (JPEG/PNG)"),
         lat: float | None = Form(None, description="Enlem (boşsa EXIF'ten okunur)"),
         lon: float | None = Form(None, description="Boylam (boşsa EXIF'ten okunur)"),
@@ -103,8 +100,6 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         except FileNotFoundError as e:
             raise HTTPException(503, str(e)) from e
-        if result.get("is_emri_tetiklendi"):
-            background.add_task(pl.send_work_order, result["ariza"]["properties"]["id"])
         return result
 
     @app.get("/api/issues")

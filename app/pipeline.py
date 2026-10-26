@@ -1,12 +1,11 @@
 """Uçtan uca karar destek hattı.
 
 görüntü -> hasar tespiti -> şiddet -> KVKK maskeleme -> konum bağlamı
-        -> mükerrer kayıt birleştirme -> öncelik -> (kritikse) iş emri bildirimi
+        -> mükerrer kayıt birleştirme -> öncelik ve iş emri
 """
 
 from __future__ import annotations
 
-import logging
 import uuid
 from pathlib import Path
 
@@ -17,12 +16,10 @@ from .config import CLASS_LABELS_TR, Settings
 from .context import RoadContext
 from .detector import Detection, Detector
 from .geo import exif_gps, feature
-from .notifier import build_work_order, send_webhook
 from .privacy import PrivacyMasker
-from .repository import Repository, now_iso
+from .repository import Repository
 from .severity import image_severity, priority_score
 
-log = logging.getLogger(__name__)
 
 SOURCES = ("vatandas", "saha_araci")
 CLASS_COLORS = {"D40": (0, 0, 230), "D20": (0, 120, 255), "D10": (0, 200, 255), "D00": (0, 220, 180)}
@@ -40,14 +37,12 @@ class RoadDamagePipeline:
         masker: PrivacyMasker,
         context: RoadContext,
         repo: Repository,
-        notify=send_webhook,
     ):
         self.settings = settings
         self.detector = detector
         self.masker = masker
         self.context = context
         self.repo = repo
-        self._notify = notify
         settings.media_dir.mkdir(parents=True, exist_ok=True)
 
     def analyze(self, image_bytes: bytes, lat: float | None = None, lon: float | None = None,
@@ -102,7 +97,7 @@ class RoadDamagePipeline:
             "mevcut_kayitla_birlestirildi": merged,
             "goruntu_url": f"/media/{image_name}",
             "ariza": issue_to_feature(issue),
-            "is_emri_tetiklendi": issue.get("_notify", False),
+            "kritik_oncelik": issue["level"] == "kritik",
         }
 
     def _upsert_issue(self, lat, lon, damage_class, severity, image_name) -> tuple[dict, bool]:
@@ -132,24 +127,7 @@ class RoadDamagePipeline:
                     level=prio["level"], context={**ctx, "skor": prio["breakdown"]}, image_path=image_name,
                 )
                 merged = False
-
-            # Eşik ilk kez aşıldığında tek bir iş emri; kilit içinde işaretlenir ki çift gönderim olmasın
-            if issue["priority"] >= self.settings.critical_threshold and not issue["notified_at"]:
-                issue = self.repo.update_issue(issue["id"], notified_at="beklemede")
-                issue["_notify"] = True
         return issue, merged
-
-    def send_work_order(self, issue_id: int) -> bool:
-        """Arka planda çalışır. Webhook yoksa iş emri sadece kayıt altına alınır."""
-        issue = self.repo.get_issue(issue_id)
-        if not self.settings.webhook_url:
-            log.info("Webhook tanımlı değil; iş emri %s sadece sistemde.", issue["work_order_no"])
-            self.repo.update_issue(issue_id, notified_at="webhook_yok")
-            return False
-        ok = self._notify(self.settings.webhook_url, build_work_order(issue, issue_to_feature(issue)))
-        # Başarısızsa işaret kaldırılır; bir sonraki bildirimde yeniden denenir
-        self.repo.update_issue(issue_id, notified_at=now_iso() if ok else None)
-        return ok
 
     def purge_expired_media(self) -> int:
         paths = self.repo.expired_media(self.settings.retention_days)
@@ -191,11 +169,9 @@ def _detection_out(item: dict) -> dict:
         "ad": CLASS_LABELS_TR.get(det.cls, det.cls),
         "guven": det.confidence,
         "kutu": [round(v, 1) for v in det.box],
-        "cokgen": [list(p) for p in det.polygon] if det.polygon else None,
         "siddet": round(item["severity"], 3),
         "boyut_katsayisi": round(item["size"].factor, 3),
         "boyut_olcusu": item["size"].measure,
-        "boyut_kaynagi": item["size"].shape,
         "boyut_yontemi": item["size"].method,
         "alan_m2": item["size"].area_m2,
         "uzunluk_m": item["size"].length_m,
@@ -205,21 +181,11 @@ def _detection_out(item: dict) -> dict:
 def _annotate(image: np.ndarray, items: list[dict]) -> np.ndarray:
     out = image.copy()
     thickness = max(2, round(min(out.shape[:2]) / 300))
-    # Segmentasyon modelinde hasarın sınırı yarı saydam boyanır
-    fill = out.copy()
-    for item in items:
-        det: Detection = item["detection"]
-        if det.polygon:
-            cv2.fillPoly(fill, [det.outline.astype(np.int32)], CLASS_COLORS.get(det.cls, (200, 200, 200)))
-    out = cv2.addWeighted(fill, 0.35, out, 0.65, 0)
     for item in items:
         det: Detection = item["detection"]
         x1, y1, x2, y2 = (int(v) for v in det.box)
         color = CLASS_COLORS.get(det.cls, (200, 200, 200))
-        if det.polygon:
-            cv2.polylines(out, [det.outline.astype(np.int32)], True, color, thickness, cv2.LINE_AA)
-        else:
-            cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
         # OpenCV Türkçe karakter çizemez; etikette sınıf kodu kullanılır, adı arayüzde gösterilir
         label = f"{det.cls} {det.confidence:.0%}"
         scale = thickness / 3

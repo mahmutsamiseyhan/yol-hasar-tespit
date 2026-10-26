@@ -75,27 +75,16 @@ def test_merge_keeps_most_severe_class(make_pipeline):
     assert p["hasar_sinifi"] == "D40"
 
 
-def test_critical_issue_triggers_single_work_order(make_pipeline, settings):
-    sent = []
-    settings.webhook_url = "http://n8n.local/webhook/yol"
-    pl = make_pipeline(detections=[BIG_POTHOLE], notify=lambda url, payload: sent.append(payload) or True)
+def test_critical_issue_is_flagged_with_work_order(make_pipeline):
+    pl = make_pipeline(detections=[BIG_POTHOLE])
     res = pl.analyze(jpeg_bytes(), LAT, LON)  # ana arter + okul yakını + büyük çukur
-    assert res["ariza"]["properties"]["oncelik_seviyesi"] == "kritik"
-    assert res["is_emri_tetiklendi"] is True
-    assert pl.send_work_order(res["ariza"]["properties"]["id"]) is True
-    assert sent[0]["is_emri_no"] == res["ariza"]["properties"]["is_emri_no"]
-    assert sent[0]["geojson"]["type"] == "Feature"
+    p = res["ariza"]["properties"]
+    assert p["oncelik_seviyesi"] == "kritik" and res["kritik_oncelik"] is True
+    assert p["is_emri_no"].startswith("YH-")
 
-    again = pl.analyze(jpeg_bytes(), LAT, LON)
-    assert again["is_emri_tetiklendi"] is False
-
-
-def test_failed_webhook_is_retried_on_next_report(make_pipeline, settings):
-    settings.webhook_url = "http://n8n.local/webhook/yol"
-    pl = make_pipeline(detections=[BIG_POTHOLE], notify=lambda url, payload: False)
-    res = pl.analyze(jpeg_bytes(), LAT, LON)
-    assert pl.send_work_order(res["ariza"]["properties"]["id"]) is False
-    assert pl.analyze(jpeg_bytes(), LAT, LON)["is_emri_tetiklendi"] is True
+    pl.detector.detections = [SMALL_CRACK]
+    side = pl.analyze(jpeg_bytes(), LAT, LON + 0.01)  # ara sokakta küçük çatlak
+    assert side["kritik_oncelik"] is False
 
 
 def test_location_from_exif(make_pipeline):
@@ -144,15 +133,3 @@ def test_retention_purges_closed_issue_images(make_pipeline, settings):
     assert not image.exists()
     assert pl.repo.get_issue(p["id"])["image_path"] is None
 
-
-def test_segmentation_polygon_returned_and_drawn(make_pipeline, settings):
-    from app.detector import Detection
-
-    poly = [(220, 310), (430, 300), (450, 410), (240, 420)]
-    pl = make_pipeline(detections=[Detection("D40", 0.9, (220, 300, 450, 420), polygon=poly)])
-    res = pl.analyze(jpeg_bytes(), LAT, LON)
-    det = res["tespitler"][0]
-    assert det["cokgen"] == [list(p) for p in poly]
-    assert det["boyut_kaynagi"] == "cokgen" and det["boyut_olcusu"] == "alan"
-    stored = cv2.imread(str(settings.media_dir / res["goruntu_url"].split("/")[-1]))
-    assert stored is not None

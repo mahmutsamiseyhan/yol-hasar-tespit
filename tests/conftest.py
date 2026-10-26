@@ -63,7 +63,6 @@ def settings(tmp_path):
     s = Settings()
     s.data_dir = tmp_path
     s.db_path = tmp_path / "test.db"
-    s.webhook_url = None
     s.camera_homography = None
     return s
 
@@ -75,14 +74,13 @@ def context():
 
 @pytest.fixture
 def make_pipeline(settings, context):
-    def _make(detections=None, privacy_boxes=None, notify=None):
+    def _make(detections=None, privacy_boxes=None):
         return RoadDamagePipeline(
             settings=settings,
             detector=FakeDetector(detections),
             masker=PrivacyMasker([FakeRegionDetector(privacy_boxes or [])]),
             context=context,
             repo=Repository(settings.db_path),
-            notify=notify or (lambda url, payload: True),
         )
 
     return _make

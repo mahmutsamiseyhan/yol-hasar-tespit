@@ -13,7 +13,7 @@ flowchart LR
     F -- hayır --> H[Yeni arıza<br>iş emri no]
     G --> I[Öncelik 1-100]
     H --> I
-    I -- ≥ 70 --> J[Webhook / n8n<br>Fen İşleri iş emri]
+    I -- ≥ 70 --> J[Kritik iş emri<br>kuyruğun başında]
     I --> K[GeoJSON API<br>+ harita arayüzü]
     D --> K
 ```
@@ -27,7 +27,7 @@ flowchart LR
 | Konum bağlamı | Hasar ana arterde mi, ara sokakta mı? 150 m içinde okul/hastane var mı? (OpenStreetMap, çevrimdışı) | `app/context.py` |
 | KVKK | Kişi, yüz ve plaka bölgeleri **diske yazılmadan önce** maskelenir; ham görüntü saklanmaz; saklama süresi dolan görseller silinir | `app/privacy.py` |
 | Mükerrer kayıt | 15 m içindeki açık kayıtla birleştirir, yeni iş emri açmaz; konum her bildirimle ortalanır | `app/pipeline.py`, `app/repository.py` |
-| İş emri | Kritik eşiği ilk kez aşan arıza için tek bir webhook (n8n vb.) | `app/notifier.py` |
+| İş emri | Her arızaya iş emri numarası (YH-yıl-sıra); 70 ve üzeri puan kritik olarak iş kuyruğunun başına alınır | `app/repository.py` |
 | Video | Saha aracı videosunda ByteTrack takibi: her hasar bir kez gönderilir, GPS zamanla eşlenir | `scripts/process_video.py` |
 | Arayüz | Leaflet haritası, fotoğraf yükleme, önceliğe göre iş kuyruğu, saha geri bildirimi | `app/static/index.html` |
 
@@ -59,18 +59,6 @@ Mapillary'deki Bursa görüntülerinden 54'ü elle, çokgen çizilerek etiketlen
 
 Başka ülkelerin verisiyle eğitilen model Bursa'da yarı performansa düşüyor (alan farkı). Gözlenen hatalar: şerit çizgisi → boyuna çatlak, rögar kapağı → çukur, parke taşı → timsah sırtı, aşınmış asfalttaki çatlakları kaçırma. Örneklem küçük olduğu için sınıf bazında sonuç verilmemiştir.
 
-## Segmentasyon modeli (hasarın gerçek sınırı)
-
-Tespit modeli hasarın etrafına kutu çizer. Segmentasyon modeli hasarın sınırını çokgen olarak çizer; böylece öncelik puanındaki boyut kutudan değil hasarın kendisinden hesaplanır.
-
-RDD2022'de çokgen etiket olmadığı için kutular SAM2 ile çokgene çevrilir (`scripts/rdd_to_seg_sam.py`): maske kutuyla kırpılır, SAM nesneyi bulamadıysa ya da kutuyu tamamen doldurduysa insan kutusu korunur. Çekya örneğinde kutuların %86-100'ü çokgene çevrildi.
-
-Eğitim ve değerlendirme: [`notebooks/02_segmentasyon_colab.ipynb`](notebooks/02_segmentasyon_colab.ipynb). Çıkan `best-seg.pt` dosyası `models/` altına konduğunda uygulama onu otomatik kullanır.
-
-Kıyas iki ayrı ölçümle yapılır:
-- **Kutu doğruluğu, insan kutularına göre** (`scripts/compare_box_map.py`): iki model aynı test görüntülerinde Ultralytics'in tespit doğrulayıcısıyla ölçülür. Segmentasyonun kutu doğruluğunu bozup bozmadığını gösterir.
-- **Maske doğruluğu, elle çizilen çokgenlere göre** (`scripts/evaluate_bursa.py --model models/best-seg.pt`): SAM sözde etiketlerine değil, Bursa test setindeki insan çokgenlerine göre.
-
 ## Öncelik formülü
 
 ```
@@ -79,7 +67,6 @@ Kıyas iki ayrı ölçümle yapılır:
 
 w_sınıf   : D40 1.0 · D20 0.8 · D10 0.5 · D00 0.4      (Fen İşleri ayarlayabilir: CLASS_WEIGHTS)
 boyut     : çatlaklarda (D00, D10) uzunluk, timsah sırtı ve çukurda (D20, D40) alan;
-            segmentasyon modelinde hasarın çokgeninden, tespit modelinde kutudan;
             kalibre araç kamerasında metre / m² (homografi), diğerlerinde görüntüye oranla
 K_konum   : otoyol/devlet yolu 1.0 · ana arter 0.9 · tali 0.8 · toplayıcı 0.7 · ara sokak 0.55, okul/hastane yakını +0.1
 B_bildirim: 1 + 0.25 × ln(bildirim sayısı)
@@ -89,7 +76,7 @@ Model güven skoru şiddete **katılmaz**; yalnızca eşik olarak kullanılır (
 
 | Seviye | Puan | Önerilen aksiyon (Fen İşleri belirler) |
 |---|---|---|
-| Kritik | ≥ 70 | Otomatik iş emri |
+| Kritik | ≥ 70 | Kuyruğun başı, ilk müsait ekip |
 | Yüksek | 45–69 | Haftalık plan |
 | Orta | 25–44 | İzleme |
 | Düşük | < 25 | Periyodik bakım |
@@ -133,7 +120,7 @@ pytest
 | `GET /api/issues/{id}` | Arıza ve tüm bildirimleri |
 | `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit"}`: saha geri bildirimi |
 | `GET /api/stats` | Durum ve seviye özetleri |
-| `GET /health` | Model, KVKK dedektörleri, bağlam verisi, webhook durumu |
+| `GET /health` | Model, KVKK dedektörleri, bağlam verisi durumu |
 | `GET /etiket` | Yerel etiket düzeltme aracı (test seti hazırlamak için) |
 
 GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir.
