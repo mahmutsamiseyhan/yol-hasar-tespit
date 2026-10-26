@@ -1,0 +1,18 @@
+# Otomatik HTTPS: Caddy, DOMAIN için Let's Encrypt sertifikasını kendisi alır ve yeniler.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 16MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Kamera ve konum yalnızca bu sitenin kendisine açık
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
+	}
+	reverse_proxy api:8000 {
+		# Canlı olay akışı (SSE) beklemeden iletilsin
+		flush_interval -1
+	}
+}

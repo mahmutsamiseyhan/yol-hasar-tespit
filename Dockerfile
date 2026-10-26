@@ -22,4 +22,5 @@ RUN python scripts/download_models.py
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Ters vekil (Caddy) arkasında gerçek istemci IP'si X-Forwarded-For başlığından alınır (istek sınırı için)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

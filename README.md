@@ -112,6 +112,10 @@ Arayüz: http://localhost:8000 · API dokümantasyonu: http://localhost:8000/doc
 - 8000 portu doluysa: `PORT=8001 docker compose up`
 - Docker Desktop + WSL2 üzerinde test edildi: sağlık kontrolü, uçtan uca demo akışı (tarayıcı testi) ve yeniden başlatmada veri kalıcılığı.
 
+### İnternette yayınlama (HTTPS)
+
+Türkiye'deki bir sunucuda kalıcı HTTPS adresiyle yayınlama: [docs/yayinlama.md](docs/yayinlama.md). Uygulama ve otomatik HTTPS (Caddy, Let's Encrypt) `deploy/docker-compose.prod.yml` ile birlikte kalkar; kurulum `deploy/sunucu_kurulum.sh` ile tek komuttur. Yayında etiket aracı kapalıdır ve IP başına istek sınırı uygulanır.
+
 ### 3. Docker olmadan (geliştirme)
 
 ```bash

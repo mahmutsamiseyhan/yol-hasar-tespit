@@ -1,0 +1,42 @@
+# Üretim / genel erişimli kurulum: uygulama + otomatik HTTPS (Caddy)
+# Kullanım (deploy/ klasöründe, .env içinde DOMAIN tanımlıyken):
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  api:
+    build: ..
+    image: yol-hasar-tespit:latest
+    environment:
+      MODEL_DIR: /app/models/custom
+      DATA_DIR: /app/data/runtime
+      DB_PATH: /app/data/runtime/yol_hasar.db
+      PUBLIC_URL: https://${DOMAIN}
+      ENABLE_LABELING: "0"           # etiket aracı internete açılmaz
+      UPLOAD_LIMIT_PER_MIN: "20"
+      OMP_NUM_THREADS: "2"           # küçük sunucuda CPU'yu boğmasın
+    volumes:
+      - ../models:/app/models/custom:ro
+      - yol_hasar_data:/app/data/runtime
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8.4
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  yol_hasar_data:
+  caddy_data:
+  caddy_config:

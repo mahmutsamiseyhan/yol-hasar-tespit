@@ -63,6 +63,10 @@ class Settings:
     context_path: Path = field(
         default_factory=lambda: Path(os.getenv("CONTEXT_PATH", ROOT_DIR / "data" / "bursa_context.geojson"))
     )
+    # IP başına dakikalık istek sınırı (0 = sınırsız): fotoğraf analizi ve durum değişikliği
+    upload_limit_per_min: int = field(default_factory=lambda: int(os.getenv("UPLOAD_LIMIT_PER_MIN", 20)))
+    write_limit_per_min: int = field(default_factory=lambda: int(os.getenv("WRITE_LIMIT_PER_MIN", 60)))
+    enable_labeling: bool = field(default_factory=lambda: os.getenv("ENABLE_LABELING", "1") not in ("0", "false", "no"))
     # Telefonların erişeceği genel HTTPS adresi (ör. tünel adresi); paneldeki QR kod bunu gösterir
     public_url: str | None = field(default_factory=lambda: (os.getenv("PUBLIC_URL") or "").rstrip("/") or None)
     # Etiket düzeltme aracının çalıştığı klasör (görüntü + YOLO etiketleri)

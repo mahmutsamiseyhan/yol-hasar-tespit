@@ -18,6 +18,7 @@ from .detector import YoloDetector
 from .events import EventBus, report_event
 from .geo import feature_collection
 from .labeling import LabelStore, create_router
+from .ratelimit import RateLimiter
 from .pipeline import AnalysisError, RoadDamagePipeline, issue_to_feature
 from .privacy import build_default_masker
 from .repository import ALL_STATUSES, Repository
@@ -66,6 +67,16 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
     )
     app.state.pipeline = pipeline
     app.state.events = EventBus()
+    settings = pipeline.settings if pipeline else get_settings()
+    # İnternete açık kurulumda kötüye kullanımı sınırlamak için IP başına dakikalık istek sınırı
+    upload_limit = RateLimiter(settings.upload_limit_per_min)
+    write_limit = RateLimiter(settings.write_limit_per_min)
+
+    def guard(limiter: RateLimiter, request: Request) -> None:
+        ip = request.client.host if request.client else "?"
+        if not limiter.allow(ip):
+            raise HTTPException(429, "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin.",
+                                headers={"Retry-After": str(limiter.retry_after(ip))})
 
     def p() -> RoadDamagePipeline:
         return app.state.pipeline
@@ -90,12 +101,14 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
 
     @app.post("/api/analyze-road")
     async def analyze_road(
+        request: Request,
         image: UploadFile = File(..., description="Yol fotoğrafı (JPEG/PNG)"),
         lat: float | None = Form(None, description="Enlem (boşsa EXIF'ten okunur)"),
         lon: float | None = Form(None, description="Boylam (boşsa EXIF'ten okunur)"),
         source: str = Form("vatandas", description="vatandas | saha_ekibi | saha_araci"),
         konum_dogrulugu_m: float | None = Form(None, description="Telefon GPS doğruluğu (metre)"),
     ):
+        guard(upload_limit, request)
         data = await image.read()
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "Dosya 15 MB sınırını aşıyor.")
@@ -146,8 +159,9 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         return {"ariza": issue_to_feature(issue), "bildirimler": p().repo.list_reports(issue_id)}
 
     @app.patch("/api/issues/{issue_id}")
-    def update_status(issue_id: int, body: StatusUpdate):
+    def update_status(issue_id: int, body: StatusUpdate, request: Request):
         """Saha ekibinin geri bildirimi. 'yanlis_tespit' kayıtları modelin yeniden eğitiminde kullanılır."""
+        guard(write_limit, request)
         if body.durum not in ALL_STATUSES:
             raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(ALL_STATUSES)}")
         if not p().repo.get_issue(issue_id):
@@ -161,12 +175,13 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
     def stats():
         return p().repo.stats()
 
-    @app.get("/etiket", include_in_schema=False)
-    def labeling_page():
-        return FileResponse(STATIC_DIR / "etiket.html")
+    # Etiket aracı geliştirme içindir; internete açık kurulumda kapatılır (ENABLE_LABELING=0)
+    if settings.enable_labeling:
+        @app.get("/etiket", include_in_schema=False)
+        def labeling_page():
+            return FileResponse(STATIC_DIR / "etiket.html")
 
-    settings = pipeline.settings if pipeline else get_settings()
-    app.include_router(create_router(LabelStore(settings.label_dir)))
+        app.include_router(create_router(LabelStore(settings.label_dir)))
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     media_dir = settings.media_dir
