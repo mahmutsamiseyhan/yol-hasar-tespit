@@ -31,6 +31,22 @@ flowchart LR
 | Video | Saha aracı videosunda ByteTrack takibi: her hasar bir kez gönderilir, GPS zamanla eşlenir | `scripts/process_video.py` |
 | Arayüz | Leaflet haritası, fotoğraf yükleme, önceliğe göre iş kuyruğu, saha geri bildirimi | `app/static/index.html` |
 
+## Model sonuçları
+
+YOLO11s, RDD2022'nin 5 ülkesiyle eğitildi (17.818 eğitim, 2.225 doğrulama görüntüsü). Aşağıdaki değerler modelin **hiç görmediği** 2.232 test görüntüsünde (4.030 hasar) ölçüldü.
+
+| Sınıf | Precision | Recall | AP50 | AP50-95 |
+|---|---|---|---|---|
+| D00 Boyuna çatlak | 0.635 | 0.651 | 0.673 | 0.384 |
+| D10 Enine çatlak | 0.602 | 0.584 | 0.617 | 0.294 |
+| D20 Timsah sırtı | 0.673 | 0.627 | 0.697 | 0.383 |
+| D40 Çukur | 0.578 | 0.450 | 0.498 | 0.201 |
+| **Tümü** | **0.622** | **0.578** | **0.621** | **0.316** |
+
+Hız: görüntü başına ~6 ms (4.5 ms çıkarım, NVIDIA L4).
+
+En zayıf sınıf çukur (D40): eğitim verisindeki en az örnekli sınıf ve uzaktan küçük görünüyor. Videoda bir çukur onlarca karede göründüğü için tek kare recall değerinin pratikteki etkisi daha düşüktür. Çukura özel ek veri ve Bursa verisiyle yeniden eğitim yol haritasındadır.
+
 ## Öncelik formülü
 
 ```
