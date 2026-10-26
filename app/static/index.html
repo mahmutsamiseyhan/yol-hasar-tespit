@@ -345,7 +345,7 @@ function renderResult(d) {
     </div>
     <h3>Teknik</h3>
     <div class="kv">
-      <span>Model</span><span>${esc(a.model || "-")} · güven eşiği ${a.guven_esigi ?? "-"} · aday eşiği ${a.aday_esigi ?? "-"}</span>
+      <span>Model</span><span>${esc(a.model || "-")} · güven eşiği ${a.sinif_esikleri ? Object.entries(a.sinif_esikleri).map(([k, v]) => `${k} ${v}`).join(", ") : (a.guven_esigi ?? "-")} · aday eşiği ${a.aday_esigi ?? "-"}</span>
       <span>Analiz modu</span><span>${MODE_TR[a.analiz_modu] || "-"}</span>
       <span>Görüntü</span><span>${g.genislik || "-"}×${g.yukseklik || "-"} px, ${g.yon || "-"}</span>
       <span>Işık</span><span>${g.isik === "dusuk" ? "düşük" : "yeterli"} (parlaklık ${g.parlaklik ?? "-"}/255)</span>

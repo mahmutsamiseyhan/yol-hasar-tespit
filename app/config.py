@@ -18,6 +18,22 @@ def _default_model() -> Path:
     return Path(os.getenv("MODEL_DIR", ROOT_DIR / "models")) / "best.pt"
 
 
+def load_class_thresholds(path: Path | None = None) -> dict:
+    """Sınıf bazlı güven eşikleri: CLASS_CONF_THRESHOLDS (JSON) ya da models/esikler.json.
+
+    Dosya, eğitim notebook'unun doğrulama verisinde her sınıf için F1'i en yüksek yapan eşikle ürettiği
+    {"esikler": {"D00": 0.45, ...}} biçimindedir. Yoksa tüm sınıflar için CONF_THRESHOLD kullanılır.
+    """
+    raw = os.getenv("CLASS_CONF_THRESHOLDS")
+    if raw:
+        return {k: float(v) for k, v in json.loads(raw).items()}
+    path = path or Path(os.getenv("THRESHOLDS_PATH") or Path(os.getenv("MODEL_DIR", ROOT_DIR / "models")) / "esikler.json")
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {k: float(v) for k, v in data.get("esikler", data).items()}
+
+
 def _env_json(name: str, default):
     raw = os.getenv(name)
     return json.loads(raw) if raw else default
@@ -53,6 +69,7 @@ DEFAULT_ROAD_WEIGHTS = {
 class Settings:
     model_path: Path = field(default_factory=lambda: Path(os.getenv("MODEL_PATH") or _default_model()))
     conf_threshold: float = field(default_factory=lambda: _env_float("CONF_THRESHOLD", 0.35))
+    class_conf_thresholds: dict = field(default_factory=load_class_thresholds)
     # Bu değer ile güven eşiği arasındaki tespitler kayıt açmaz, analiz raporunda "zayıf aday" olarak gösterilir
     candidate_conf: float = field(default_factory=lambda: _env_float("CANDIDATE_CONF", 0.10))
     iou_threshold: float = field(default_factory=lambda: _env_float("IOU_THRESHOLD", 0.5))
@@ -91,6 +108,9 @@ class Settings:
     poi_bonus: float = field(default_factory=lambda: _env_float("POI_BONUS", 0.1))
     # Sabit araç kamerası kalibrasyonu: görüntü pikseli -> zemin (metre) 3x3 homografi matrisi
     camera_homography: list | None = field(default_factory=lambda: _env_json("CAMERA_HOMOGRAPHY", None))
+
+    def threshold_for(self, cls: str) -> float:
+        return self.class_conf_thresholds.get(cls, self.conf_threshold)
 
     @property
     def media_dir(self) -> Path:

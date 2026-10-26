@@ -95,7 +95,9 @@ def main():
     ap.add_argument("--labels", type=Path, default=ROOT / "data" / "bursa_test" / "etiket")
     ap.add_argument("--model", type=Path, default=ROOT / "models" / "best.pt")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "bursa_test" / "degerlendirme")
-    ap.add_argument("--conf", type=float, default=0.35, help="Uygulamadaki güven eşiği")
+    ap.add_argument("--conf", type=float, default=0.35, help="Uygulamadaki genel güven eşiği")
+    ap.add_argument("--thresholds", type=Path, default=ROOT / "models" / "esikler.json",
+                    help="Sınıf bazlı eşik dosyası (yoksa tüm sınıflar için --conf kullanılır)")
     args = ap.parse_args()
 
     reviewed, skipped = collect_reviewed(args.labels)
@@ -122,15 +124,26 @@ def main():
         detection = {"precision": round(m.box.mp, 3), "recall": round(m.box.mr, 3),
                      "mAP50": round(m.box.map50, 3), "mAP50-95": round(m.box.map, 3), "siniflar": per_class}
 
+    # Görüntü düzeyi metrikler uygulamanın kendi dedektörü ve eşik kuralıyla hesaplanır (birebir aynı karar)
+    import cv2
+
+    from app.config import load_class_thresholds
+    from app.detector import YoloDetector
+
+    thresholds = load_class_thresholds(args.thresholds) if args.thresholds and args.thresholds.exists() else {}
+    detector = YoloDetector(args.model, conf=min([args.conf, *thresholds.values()]))
     predictions = {}
     for r in reviewed:
-        res = model.predict(str(r["image"]), conf=args.conf, imgsz=640, verbose=False)[0]
-        predictions[r["image"].name] = [{"x": b[0], "y": b[1], "w": b[2], "h": b[3]} for b in res.boxes.xywhn.tolist()]
+        img = cv2.imread(str(r["image"]))
+        h, w = img.shape[:2]
+        kept = [d for d in detector.detect(img) if d.confidence >= thresholds.get(d.cls, args.conf)]
+        predictions[r["image"].name] = [{"x": (d.box[0] + d.box[2]) / 2 / w, "y": (d.box[1] + d.box[3]) / 2 / h,
+                                         "w": (d.box[2] - d.box[0]) / w, "h": (d.box[3] - d.box[1]) / h} for d in kept]
     images = image_level(reviewed, predictions)
 
     result = {"goruntu_sayisi": len(reviewed), "hasar_kutusu": n_boxes, "dislanan": skipped,
               "tespit_metrikleri": detection, "rdd2022_referans": RDD_REFERENCE,
-              "goruntu_duzeyi": {**images, "guven_esigi": args.conf}}
+              "goruntu_duzeyi": {**images, "guven_esigi": args.conf, "sinif_esikleri": thresholds or None}}
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "bursa_metrikleri.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -142,7 +155,8 @@ def main():
             print(f"  {c}: AP50 {v['AP50']:.3f}  (P {v['precision']:.3f}, R {v['recall']:.3f})")
     else:
         print("  Hasarlı görüntü yok; yalnızca yanlış alarm oranı ölçüldü.")
-    print(f"\n=== Görüntü düzeyi (güven eşiği {args.conf}) ===")
+    rule = ", ".join(f"{k} {v}" for k, v in thresholds.items()) if thresholds else f"tüm sınıflar {args.conf}"
+    print(f"\n=== Görüntü düzeyi (eşikler: {rule}) ===")
     if images["yanlis_alarm_orani"] is not None:
         print(f"  Sağlam yolda yanlış alarm: {images['yanlis_alarm_goruntu']}/{images['hasarsiz_goruntu']} "
               f"(%{100 * images['yanlis_alarm_orani']:.0f})")

@@ -74,8 +74,8 @@ class RoadDamagePipeline:
         started = time.perf_counter()
         h, w = image.shape[:2]
         found = self.detector.detect(image)
-        detections = [d for d in found if d.confidence >= self.settings.conf_threshold]
-        candidates = sorted((d for d in found if d.confidence < self.settings.conf_threshold),
+        detections = [d for d in found if d.confidence >= self.settings.threshold_for(d.cls)]
+        candidates = sorted((d for d in found if d.confidence < self.settings.threshold_for(d.cls)),
                             key=lambda d: d.confidence, reverse=True)
         homography = self.settings.camera_homography if source == "saha_araci" else None
         sev = image_severity(detections, w, h, self.settings.class_weights, homography)
@@ -97,6 +97,7 @@ class RoadDamagePipeline:
             "analiz_modu": "tam_kare+yol_bolgesi" if getattr(self.detector, "uses_road_focus", lambda _: False)(image)
                            else "tam_kare",
             "guven_esigi": self.settings.conf_threshold,
+            "sinif_esikleri": self.settings.class_conf_thresholds or None,
             "aday_esigi": self.settings.candidate_conf,
             "model": Path(str(getattr(self.detector, "model_path", "model"))).name,
             "konum_dogrulugu_m": round(accuracy_m) if accuracy_m is not None else None,
@@ -277,19 +278,20 @@ def _assessment(found: bool, detections: list[Detection], candidates: list[Detec
     """Analizin insan tarafından okunabilir özeti: karar, görüntü kalitesi, konum ve öncelik."""
     notes = []
     pct = lambda c: f"%{round(100 * c)}"  # noqa: E731
-    threshold = pct(report["guven_esigi"])
+    threshold = ("sınıf bazlı güven eşiklerini" if report.get("sinif_esikleri")
+                 else f"güven eşiğini ({pct(report['guven_esigi'])})")
     if found:
         top = max(detections, key=lambda d: d.confidence)
         notes.append({"tur": "karar", "metin": f"{len(detections)} hasar tespit edildi. En belirgini: "
                       f"{CLASS_LABELS_TR.get(top.cls, top.cls)} ({pct(top.confidence)} güven)."})
     elif candidates:
         c = candidates[0]
-        notes.append({"tur": "karar", "metin": f"Güven eşiğini ({threshold}) geçen hasar yok. Eşiğin altında "
+        notes.append({"tur": "karar", "metin": f"{threshold[0].upper() + threshold[1:]} geçen hasar yok. Eşiğin altında "
                       f"{len(candidates)} zayıf aday var (en güçlüsü {CLASS_LABELS_TR.get(c.cls, c.cls)}, "
                       f"{pct(c.confidence)}); kayıt açılmadı. Zayıf adaylar çoğunlukla gölge, yama, çakıl veya "
                       "yol çizgisidir. Şüphe varsa hasarı daha yakından fotoğraflayın."})
     else:
-        notes.append({"tur": "karar", "metin": f"Güven eşiğini ({threshold}) geçen hasar yok; model eşik altında "
+        notes.append({"tur": "karar", "metin": f"{threshold[0].upper() + threshold[1:]} geçen hasar yok; model eşik altında "
                       "bile aday görmedi. Yol yüzeyi sağlam görünüyor."})
 
     img = report["goruntu"]

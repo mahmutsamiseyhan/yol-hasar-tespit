@@ -64,6 +64,7 @@ def settings(tmp_path):
     s.data_dir = tmp_path
     s.db_path = tmp_path / "test.db"
     s.camera_homography = None
+    s.class_conf_thresholds = {}  # makinedeki models/esikler.json testleri etkilemesin
     return s
 
 
