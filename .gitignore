@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# Model ağırlıkları ve çalışma zamanı verisi repoya girmez
+models/
+runs/
+data/*
+!data/bursa_context.geojson
+!data/bursa_test/
+data/bursa_test/*
+!data/bursa_test/.gitkeep

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bursa Yol Hasarı Karar Destek</title>
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --ink: #1c2430; --muted: #5f6b7a; --line: #dfe4ea;
+    --brand: #0b5394; --brand-ink: #ffffff;
+    --kritik: #c62828; --yuksek: #ef6c00; --orta: #f9a825; --dusuk: #2e7d32;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: var(--brand); color: var(--brand-ink); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .sub { opacity: .8; font-size: 12px; }
+  .stats { margin-left: auto; display: flex; gap: 14px; font-size: 12px; }
+  .stat b { font-size: 16px; display: block; text-align: center; }
+  main { display: grid; grid-template-columns: 400px 1fr; height: calc(100% - 52px); }
+  aside { overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); }
+  section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 10px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  input, select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+  .row { display: flex; gap: 8px; } .row > div { flex: 1; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 6px 10px; }
+  button.primary { width: 100%; margin-top: 12px; padding: 9px; background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
+  button:disabled { opacity: .6; cursor: wait; }
+  #map { height: 100%; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; }
+  .lvl-kritik { background: var(--kritik); } .lvl-yuksek { background: var(--yuksek); }
+  .lvl-orta { background: var(--orta); color: #222; } .lvl-dusuk { background: var(--dusuk); }
+  .result img, .popup img { width: 100%; border-radius: 6px; border: 1px solid var(--line); margin: 8px 0; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .notice { padding: 8px 10px; border-radius: 6px; font-size: 13px; margin: 8px 0; }
+  .notice.info { background: #e8f1fb; color: #0b4a85; } .notice.warn { background: #fff4e5; color: #8a4b00; }
+  .notice.err { background: #fdecea; color: #a12622; } .notice.ok { background: #e9f5ec; color: #1e5e2c; }
+  .queue-item { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .queue-item:last-child { border-bottom: 0; }
+  .queue-score { font-size: 18px; font-weight: 700; text-align: center; border-radius: 8px; padding: 6px 0; color: #fff; }
+  .queue-title { font-weight: 600; } .queue-meta { font-size: 12px; color: var(--muted); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .actions button { font-size: 12px; padding: 4px 8px; }
+  .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 12px; line-height: 1.8; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .popup { width: 260px; } .popup h3 { margin: 0 0 4px; font-size: 14px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height: auto; } .stats { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Bursa Yol Hasarı Karar Destek Sistemi</h1>
+    <div class="sub">Görüntü işleme + CBS ile hasar tespiti, önceliklendirme ve iş emri</div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+<main>
+  <aside>
+    <section>
+      <h2>Yeni bildirim</h2>
+      <form id="form">
+        <label for="image">Yol fotoğrafı</label>
+        <input id="image" type="file" accept="image/jpeg,image/png" required>
+        <label for="source">Kaynak</label>
+        <select id="source">
+          <option value="vatandas">Vatandaş bildirimi</option>
+          <option value="saha_araci">Saha aracı (kalibre kamera)</option>
+        </select>
+        <div class="row">
+          <div><label for="lat">Enlem</label><input id="lat" type="number" step="any" placeholder="40.1885"></div>
+          <div><label for="lon">Boylam</label><input id="lon" type="number" step="any" placeholder="29.0610"></div>
+        </div>
+        <div class="hint">Konumu haritaya tıklayarak seçin. Boş bırakırsanız fotoğrafın GPS (EXIF) bilgisi kullanılır.</div>
+        <button class="primary" id="submit" type="submit">Analiz et</button>
+      </form>
+      <div id="result" class="result"></div>
+    </section>
+    <section>
+      <h2>İş kuyruğu (önceliğe göre)</h2>
+      <div id="queue"><div class="hint">Henüz açık arıza yok.</div></div>
+    </section>
+  </aside>
+  <div id="map"></div>
+</main>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script>
+const LEVEL_COLORS = { kritik: "#c62828", yuksek: "#ef6c00", orta: "#f9a825", dusuk: "#2e7d32" };
+const LEVEL_TR = { kritik: "Kritik", yuksek: "Yüksek", orta: "Orta", dusuk: "Düşük" };
+const STATUS_TR = { acik: "Açık", ekip_yonlendirildi: "Ekip yönlendirildi", onarildi: "Onarıldı", yanlis_tespit: "Yanlış tespit" };
+const ROAD_TR = { motorway: "Otoyol", trunk: "Devlet yolu", primary: "Ana arter", secondary: "Tali arter", tertiary: "Toplayıcı yol", local: "Ara sokak" };
+
+const map = L.map("map").setView([40.1950, 29.0300], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "© OpenStreetMap katkıcıları"
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const markers = {};
+let pickMarker = null;
+
+const legend = L.control({ position: "bottomright" });
+legend.onAdd = () => {
+  const d = L.DomUtil.create("div", "legend");
+  d.innerHTML = Object.entries(LEVEL_TR).map(([k, v]) => `<div><i style="background:${LEVEL_COLORS[k]}"></i>${v}</div>`).join("")
+    + `<div style="color:#5f6b7a">Daire boyutu = bildirim sayısı</div>`;
+  return d;
+};
+legend.addTo(map);
+
+map.on("click", (e) => {
+  document.getElementById("lat").value = e.latlng.lat.toFixed(6);
+  document.getElementById("lon").value = e.latlng.lng.toFixed(6);
+  if (pickMarker) pickMarker.setLatLng(e.latlng);
+  else pickMarker = L.circleMarker(e.latlng, { radius: 6, color: "#0b5394", fillOpacity: 1 }).addTo(map);
+});
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const badge = (lvl, score) => `<span class="badge lvl-${lvl}">${score} · ${LEVEL_TR[lvl] || lvl}</span>`;
+
+function roadText(p) {
+  const road = ROAD_TR[p.yol_sinifi] || p.yol_sinifi || "-";
+  return p.yol_adi ? `${esc(p.yol_adi)} (${road})` : road;
+}
+
+function scoreDetail(s) {
+  if (!s) return "";
+  return `Şiddet ${s.siddet} × Konum ${s.konum_katsayisi} × Bildirim ${s.bildirim_carpani} × 100`;
+}
+
+function popupHtml(f) {
+  const p = f.properties;
+  const pois = (p.yakin_kritik_tesisler || []).map((t) => `${esc(t.tur)} ${t.ad ? "(" + esc(t.ad) + ")" : ""} ${t.mesafe_m} m`).join("<br>");
+  return `<div class="popup">
+    <h3>${esc(p.hasar_adi)} <small style="color:#5f6b7a">${esc(p.hasar_sinifi)}</small></h3>
+    ${badge(p.oncelik_seviyesi, p.oncelik_puani)}
+    ${p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Tespit görseli">` : ""}
+    <div class="kv">
+      <span>İş emri</span><span>${esc(p.is_emri_no)}</span>
+      <span>Durum</span><span>${STATUS_TR[p.durum] || esc(p.durum)}</span>
+      <span>Bildirim</span><span>${p.bildirim_sayisi}</span>
+      <span>Yol</span><span>${roadText(p)}</span>
+      ${pois ? `<span>Yakında</span><span>${pois}</span>` : ""}
+      <span>Skor</span><span style="font-size:12px">${scoreDetail(p.skor_detayi)}</span>
+    </div>
+    <div class="actions">
+      <button onclick="setStatus(${p.id}, 'ekip_yonlendirildi')">Ekip yönlendir</button>
+      <button onclick="setStatus(${p.id}, 'onarildi')">Onarıldı</button>
+      <button onclick="setStatus(${p.id}, 'yanlis_tespit')">Yanlış tespit</button>
+    </div>
+  </div>`;
+}
+
+async function loadIssues() {
+  const fc = await fetch("/api/issues").then((r) => r.json());
+  layer.clearLayers();
+  const open = [];
+  for (const f of fc.features) {
+    const p = f.properties;
+    const [lon, lat] = f.geometry.coordinates;
+    const closed = p.durum === "onarildi" || p.durum === "yanlis_tespit";
+    const m = L.circleMarker([lat, lon], {
+      radius: 7 + Math.min(10, Math.log2(p.bildirim_sayisi) * 3),
+      color: "#fff", weight: 2,
+      fillColor: closed ? "#9aa5b1" : LEVEL_COLORS[p.oncelik_seviyesi], fillOpacity: closed ? 0.5 : 0.9,
+    }).bindPopup(popupHtml(f), { maxWidth: 290 });
+    m.addTo(layer);
+    markers[p.id] = m;
+    if (!closed) open.push(f);
+  }
+  renderQueue(open);
+  loadStats();
+}
+
+function renderQueue(features) {
+  const q = document.getElementById("queue");
+  if (!features.length) { q.innerHTML = `<div class="hint">Henüz açık arıza yok.</div>`; return; }
+  q.innerHTML = features.map((f) => {
+    const p = f.properties;
+    return `<div class="queue-item" data-id="${p.id}">
+      <div class="queue-score" style="background:${LEVEL_COLORS[p.oncelik_seviyesi]}">${p.oncelik_puani}</div>
+      <div>
+        <div class="queue-title">${esc(p.hasar_adi)} · ${roadText(p)}</div>
+        <div class="queue-meta">${esc(p.is_emri_no)} · ${p.bildirim_sayisi} bildirim · ${STATUS_TR[p.durum]}</div>
+      </div>
+    </div>`;
+  }).join("");
+  q.querySelectorAll(".queue-item").forEach((el) => el.addEventListener("click", () => {
+    const m = markers[el.dataset.id];
+    map.setView(m.getLatLng(), 17); m.openPopup();
+  }));
+}
+
+async function loadStats() {
+  const s = await fetch("/api/stats").then((r) => r.json());
+  const lv = s.acik_oncelik_seviyeleri || {};
+  document.getElementById("stats").innerHTML = [
+    ["Kritik", lv.kritik || 0], ["Yüksek", lv.yuksek || 0], ["Açık toplam", Object.values(lv).reduce((a, b) => a + b, 0)],
+    ["Bildirim", s.toplam_bildirim],
+  ].map(([k, v]) => `<div class="stat"><b>${v}</b>${k}</div>`).join("");
+}
+
+async function setStatus(id, durum) {
+  await fetch(`/api/issues/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ durum }) });
+  map.closePopup();
+  loadIssues();
+}
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("submit");
+  const out = document.getElementById("result");
+  const fd = new FormData();
+  fd.append("image", document.getElementById("image").files[0]);
+  fd.append("source", document.getElementById("source").value);
+  const lat = document.getElementById("lat").value, lon = document.getElementById("lon").value;
+  if (lat && lon) { fd.append("lat", lat); fd.append("lon", lon); }
+
+  btn.disabled = true; btn.textContent = "Analiz ediliyor…";
+  try {
+    const res = await fetch("/api/analyze-road", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Analiz başarısız");
+    out.innerHTML = renderResult(data);
+    await loadIssues();
+    if (data.ariza) {
+      const m = markers[data.ariza.properties.id];
+      map.setView(m.getLatLng(), 17); m.openPopup();
+    }
+  } catch (err) {
+    out.innerHTML = `<div class="notice err">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Analiz et";
+  }
+});
+
+function renderResult(d) {
+  const kvkk = `<div class="notice info">KVKK: ${d.kvkk.maskelenen_bolge} bölge maskelendi (${d.kvkk.aktif_dedektorler.join(", ") || "dedektör yok"}). Ham görüntü saklanmadı.</div>`;
+  if (!d.hasar_tespit_edildi) return `<div class="notice ok">Bu görüntüde hasar tespit edilmedi.</div>${kvkk}`;
+  const p = d.ariza.properties;
+  const dets = d.tespitler.map((t) => `<span>${esc(t.ad)}</span><span>güven %${Math.round(t.guven * 100)} · şiddet ${t.siddet}</span>`).join("");
+  return `
+    ${d.mevcut_kayitla_birlestirildi
+      ? `<div class="notice warn">15 m içinde açık kayıt bulundu: yeni iş emri açılmadı, mevcut kayıt güncellendi (${p.bildirim_sayisi}. bildirim).</div>`
+      : `<div class="notice ok">Yeni arıza kaydı açıldı: ${esc(p.is_emri_no)}</div>`}
+    ${d.is_emri_tetiklendi ? `<div class="notice err">Kritik eşik aşıldı: Fen İşleri'ne iş emri gönderiliyor.</div>` : ""}
+    <div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>
+    <img src="${esc(d.goruntu_url)}" alt="İşaretlenmiş görüntü">
+    <div class="kv">${dets}<span>Yol</span><span>${roadText(p)}</span><span>Konum kaynağı</span><span>${d.konum.kaynak === "exif" ? "Fotoğraf GPS (EXIF)" : "Harita / istek"}</span></div>
+    ${kvkk}`;
+}
+
+loadIssues();
+</script>
+</body>
+</html>
