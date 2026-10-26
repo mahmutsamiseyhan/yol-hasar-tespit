@@ -36,6 +36,27 @@ DISTRICTS = {
     "nilufer": (40.195, 28.930, 40.240, 29.000),
     "yildirim": (40.170, 29.080, 40.210, 29.140),
 }
+
+
+def _around(lat: float, lon: float, d: float = 0.015) -> tuple[float, float, float, float]:
+    return (lat - d, lon - d, lat + d, lon + d)
+
+
+# Hasar görme olasılığı yüksek bölgeler: sanayi (ağır vasıta), çevre ilçeler, kırsal yollar.
+# Hasarlı örnek bulmak için aday havuzu; eğitilen model bu havuzdaki adayları sıralar.
+CANDIDATE_AREAS = {
+    "demirtas_osb": _around(40.2692, 29.0684),
+    "bursa_osb": _around(40.2400, 28.9587),
+    "panayir": _around(40.2486, 29.0689),
+    "hamitler": _around(40.2454, 28.9884),
+    "kestel": _around(40.2008, 29.2129),
+    "gursu": _around(40.2176, 29.1936),
+    "gorukle": _around(40.2319, 28.8395),
+    "kayapa": _around(40.1720, 28.8408),
+    "inegol": _around(40.0800, 29.5097),
+}
+DISTRICTS.update(CANDIDATE_AREAS)
+CORE_DISTRICTS = ["osmangazi", "nilufer", "yildirim"]
 CELL_DEG = 0.03  # API sınırı: bbox alanı < 0.01 derece²
 
 
@@ -73,8 +94,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=Path("data/bursa_test/mapillary"))
     ap.add_argument("--per-cell", type=int, default=15, help="Her ızgara hücresinden alınacak görüntü sayısı")
-    ap.add_argument("--since", default="2021-01-01T00:00:00Z", help="Bu tarihten sonra çekilenler")
-    ap.add_argument("--districts", nargs="+", default=list(DISTRICTS), choices=list(DISTRICTS))
+    ap.add_argument("--since", default="2021-01-01T00:00:00Z", help="Bu tarihten sonra çekilenler ('' = tümü)")
+    ap.add_argument("--districts", nargs="+", default=CORE_DISTRICTS, choices=list(DISTRICTS))
+    ap.add_argument("--candidates", action="store_true", help="Yıpranmış yol aday bölgelerini indir")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -88,10 +110,11 @@ def main():
     meta_path = args.out / "atif.csv"
     rows, seen = [], set()
 
-    for district in args.districts:
+    districts = list(CANDIDATE_AREAS) if args.candidates else args.districts
+    for district in districts:
         for cell in grid(DISTRICTS[district]):
             try:
-                images = [im for im in query(token, cell, since=args.since) if im.get("thumb_2048_url")]
+                images = [im for im in query(token, cell, since=args.since or None) if im.get("thumb_2048_url")]
             except Exception as e:
                 print(f"  {district} {cell}: sorgu hatası ({e})")
                 continue
