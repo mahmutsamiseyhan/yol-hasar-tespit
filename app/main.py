@@ -15,6 +15,7 @@ from .config import ROOT_DIR, Settings, get_settings
 from .context import RoadContext
 from .detector import YoloDetector
 from .geo import feature_collection
+from .labeling import LabelStore, create_router
 from .pipeline import AnalysisError, RoadDamagePipeline, issue_to_feature
 from .privacy import build_default_masker
 from .repository import ALL_STATUSES, Repository
@@ -132,8 +133,15 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
     def stats():
         return p().repo.stats()
 
+    @app.get("/etiket", include_in_schema=False)
+    def labeling_page():
+        return FileResponse(STATIC_DIR / "etiket.html")
+
+    settings = pipeline.settings if pipeline else get_settings()
+    app.include_router(create_router(LabelStore(settings.label_dir)))
+
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    media_dir = (pipeline.settings if pipeline else get_settings()).media_dir
+    media_dir = settings.media_dir
     media_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/media", StaticFiles(directory=media_dir), name="media")
     return app

@@ -108,6 +108,7 @@ pytest
 | `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit"}`: saha geri bildirimi |
 | `GET /api/stats` | Durum ve seviye özetleri |
 | `GET /health` | Model, KVKK dedektörleri, bağlam verisi, webhook durumu |
+| `GET /etiket` | Yerel etiket düzeltme aracı (test seti hazırlamak için) |
 
 GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir.
 
@@ -126,9 +127,18 @@ GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir
 ```bash
 export MAPILLARY_TOKEN="MLY|..."          # https://www.mapillary.com/dashboard/developers
 python scripts/fetch_mapillary_bursa.py --per-cell 15
+python scripts/fetch_mapillary_bursa.py --candidates --since "" --out data/bursa_test/aday   # yıpranmış yol adayları
 ```
 
-Görüntüleri notebook'taki ön-etiketleme hücresiyle etiketleyin, CVAT veya Roboflow'da düzeltin, sonra değerlendirme hücresini çalıştırın.
+1. Görüntüleri ve modelin ön-etiketlerini `data/bursa_test/etiket/` klasörüne koyun (`<ad>.jpg` + `<ad>.txt`, YOLO formatı; ilk tahminlerin yedeği `_model/` altında).
+2. **http://localhost:8000/etiket** sayfasında her görüntüyü kontrol edin: yanlış kutuyu silin, eksik hasarı çizin, sınıfı düzeltin. Görüntüler bilgisayardan çıkmaz.
+3. Ölçün:
+
+```bash
+python scripts/evaluate_bursa.py
+```
+
+Çıktı, RDD2022 test sonucuyla kıyaslamanın yanında iki görüntü düzeyi metrik verir: sağlam yolda yanlış alarm oranı ve hasarlı yolda yakalama oranı.
 
 ## Saha aracı videosu
 

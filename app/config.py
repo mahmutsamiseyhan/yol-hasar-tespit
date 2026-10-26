@@ -57,6 +57,10 @@ class Settings:
     context_path: Path = field(
         default_factory=lambda: Path(os.getenv("CONTEXT_PATH", ROOT_DIR / "data" / "bursa_context.geojson"))
     )
+    # Etiket düzeltme aracının çalıştığı klasör (görüntü + YOLO etiketleri)
+    label_dir: Path = field(
+        default_factory=lambda: Path(os.getenv("LABEL_DIR", ROOT_DIR / "data" / "bursa_test" / "etiket"))
+    )
 
     # Mükerrer kayıt birleştirme yarıçapı (metre)
     merge_radius_m: float = field(default_factory=lambda: _env_float("MERGE_RADIUS_M", 15.0))
