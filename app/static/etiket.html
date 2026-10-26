@@ -19,13 +19,14 @@
   .progress { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; }
   .bar { width: 180px; height: 8px; background: rgba(255,255,255,.25); border-radius: 4px; overflow: hidden; }
   .bar i { display: block; height: 100%; background: #fff; width: 0; transition: width .3s; }
-  main { display: grid; grid-template-columns: 230px 1fr 300px; height: calc(100% - 52px); }
+  main { display: grid; grid-template-columns: 210px 1fr 310px; height: calc(100% - 52px); }
   aside, .side { background: var(--panel); overflow-y: auto; }
   aside { border-right: 1px solid var(--line); }
   .side { border-left: 1px solid var(--line); padding: 14px 16px; }
   .filters { display: flex; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
   button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 6px 10px; color: var(--ink); }
   button:hover { border-color: #b9c2cc; }
+  button:disabled { opacity: .45; cursor: default; }
   button.on { background: var(--brand); color: #fff; border-color: var(--brand); }
   .item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; border-bottom: 1px solid #f0f2f5; font-size: 13px; }
   .item:hover { background: #f4f7fb; } .item.cur { background: #e8f1fb; font-weight: 600; }
@@ -36,19 +37,21 @@
   .item small { margin-left: auto; color: var(--muted); }
   .center { display: flex; flex-direction: column; min-width: 0; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
   .cls { border-width: 2px; }
   .cls b { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 4px; color: #fff; font-size: 12px; margin-right: 6px; }
-  .cls.on { color: var(--ink); background: #fff; box-shadow: 0 0 0 2px currentColor inset; }
+  .cls.on { background: #fff; box-shadow: 0 0 0 2px currentColor inset; }
   .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 14px; min-height: 0; overflow: hidden; }
   .wrap { position: relative; display: inline-block; line-height: 0; user-select: none; touch-action: none; }
   .wrap img { max-width: 100%; max-height: calc(100vh - 180px); display: block; }
   .overlay { position: absolute; inset: 0; cursor: crosshair; }
-  .box { position: absolute; border: 3px solid; cursor: move; }
-  .box span { position: absolute; left: -3px; top: -22px; color: #fff; font: 600 12px/18px system-ui; padding: 1px 6px; border-radius: 3px 3px 0 0; white-space: nowrap; }
-  .box.sel { outline: 2px dashed #fff; outline-offset: 2px; }
-  .h { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid #111; }
-  .h.nw { left: -8px; top: -8px; cursor: nwse-resize; } .h.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
-  .h.ne { right: -8px; top: -8px; cursor: nesw-resize; } .h.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+  .overlay svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .overlay polygon { cursor: move; }
+  .lbl { position: absolute; transform: translateY(-100%); color: #fff; font: 600 12px/18px system-ui; padding: 1px 6px; border-radius: 3px 3px 0 0; white-space: nowrap; pointer-events: none; }
+  .v, .m { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; }
+  .v { width: 13px; height: 13px; background: #fff; border: 2px solid #111; cursor: grab; }
+  .v.first { width: 17px; height: 17px; background: #ffeb3b; }
+  .m { width: 9px; height: 9px; background: rgba(255,255,255,.75); border: 1px solid #111; cursor: copy; }
   .msg { padding: 8px 14px; font-size: 13px; background: var(--panel); border-top: 1px solid var(--line); min-height: 36px; }
   .msg.warn { color: #8a4b00; background: #fff4e5; } .msg.ok { color: #1e5e2c; background: #e9f5ec; } .msg.err { color: #a12622; background: #fdecea; }
   h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 16px 0 8px; }
@@ -59,7 +62,7 @@
   .guide div { margin-bottom: 8px; font-size: 13px; }
   .guide b { display: inline-block; min-width: 34px; padding: 0 4px; border-radius: 3px; color: #fff; text-align: center; margin-right: 6px; }
   ul { margin: 0; padding-left: 18px; font-size: 13px; } li { margin-bottom: 4px; }
-  kbd { font: 12px ui-monospace, monospace; background: #eef1f5; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+  kbd { font: 12px ui-monospace, monospace; color: var(--ink); background: #eef1f5; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
   .keys { font-size: 12px; color: var(--muted); line-height: 1.9; }
   .done { padding: 30px; text-align: center; font-size: 16px; }
 </style>
@@ -80,8 +83,16 @@
   </aside>
   <section class="center">
     <div class="toolbar" id="toolbar"></div>
-    <div class="stage" id="stage"><div class="wrap" id="wrap"><img id="img" alt=""><div class="overlay" id="overlay"></div></div></div>
-    <div class="msg" id="msg">Bir hasarın etrafına fareyle sürükleyerek kutu çizin.</div>
+    <div class="stage" id="stage">
+      <div class="wrap" id="wrap">
+        <img id="img" alt="">
+        <div class="overlay" id="overlay">
+          <svg id="svg" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+          <div id="marks"></div>
+        </div>
+      </div>
+    </div>
+    <div class="msg" id="msg"></div>
   </section>
   <div class="side">
     <h2>Bu görüntü için</h2>
@@ -95,32 +106,39 @@
         <button id="bPrev">← Önceki</button>
         <button id="bNext">Sonraki →</button>
       </div>
-      <button id="bReset">Modelin kutularına dön</button>
+      <button id="bReset">Modelin tahminine dön</button>
     </div>
+
+    <h2>Nasıl çizilir?</h2>
+    <ul>
+      <li><b>Çokgen</b> <kbd>P</kbd>: hasarın kenarı boyunca tek tek tıklayın. Bitirmek için ilk (sarı) köşeye tıklayın, çift tıklayın ya da <kbd>Enter</kbd>.</li>
+      <li><b>Dikdörtgen</b> <kbd>B</kbd>: sürükleyerek hızlı kutu.</li>
+      <li>Şekle tıklayınca köşeleri çıkar: <b>köşeyi sürükle</b> = taşı, <b>kenar ortasındaki noktayı sürükle</b> = yeni köşe, <b>köşeye sağ tık</b> = köşeyi sil.</li>
+      <li>Modelin kutuları 4 köşeli gelir; köşeleri sürükleyerek yamuğa çevirebilirsiniz.</li>
+      <li>Başka bir şeklin üstünde yeni çizime başlamak için <kbd>Shift</kbd> basılı tıklayın.</li>
+    </ul>
 
     <h2>Hasar türleri</h2>
     <div class="guide">
-      <div><b style="background:var(--D00)">D00</b>Boyuna çatlak: yol boyunca, gidiş yönünde uzanan çizgi</div>
-      <div><b style="background:var(--D10)">D10</b>Enine çatlak: yolu soldan sağa kesen çizgi</div>
-      <div><b style="background:var(--D20)">D20</b>Timsah sırtı: ağ gibi birbirine bağlı çatlaklar, bölgeye tek kutu</div>
-      <div><b style="background:var(--D40)">D40</b>Çukur: asfaltın kopup çukurlaştığı yer</div>
+      <div><b style="background:var(--D00)">D00</b>Boyuna çatlak: gidiş yönünde uzanan çizgi. Çatlağı takip eden ince bir şekil çizin.</div>
+      <div><b style="background:var(--D10)">D10</b>Enine çatlak: yolu soldan sağa kesen çizgi.</div>
+      <div><b style="background:var(--D20)">D20</b>Timsah sırtı: ağ gibi çatlaklı bölgenin dış sınırını çizin.</div>
+      <div><b style="background:var(--D40)">D40</b>Çukur: çukurun kenarını takip edin.</div>
     </div>
 
-    <h2>İşaretlemeyin, kutuysa silin</h2>
+    <h2>İşaretlemeyin, varsa silin</h2>
     <ul>
       <li>Rögar kapakları</li>
       <li>Şerit çizgileri, yaya geçitleri</li>
-      <li>Gölgeler, ıslaklık, lekeler</li>
-      <li>Yamalı ama sağlam asfalt</li>
-      <li>Emin olamadığınız uzak lekeler</li>
+      <li>Parke taşı / Arnavut kaldırımı</li>
+      <li>Gölgeler, ıslaklık, lekeler, sağlam yamalar</li>
     </ul>
 
     <h2>Kısayollar</h2>
     <div class="keys">
-      <kbd>1</kbd>–<kbd>4</kbd> sınıf seç / seçili kutunun sınıfını değiştir<br>
-      Kutuya tıkla: seç · sürükle: taşı · köşeler: boyutlandır<br>
-      <kbd>Delete</kbd> seçili kutuyu sil · <kbd>Esc</kbd> seçimi kaldır<br>
-      <kbd>←</kbd> <kbd>→</kbd> önceki / sonraki görüntü
+      <kbd>1</kbd>–<kbd>4</kbd> sınıf seç / seçili şeklin sınıfını değiştir<br>
+      <kbd>Delete</kbd> seçili şekli sil · <kbd>Backspace</kbd> çizerken son köşeyi geri al<br>
+      <kbd>Esc</kbd> çizimi iptal et / seçimi kaldır · <kbd>←</kbd> <kbd>→</kbd> görüntü değiştir
     </div>
   </div>
 </main>
@@ -132,16 +150,22 @@ const CLASSES = [
 ];
 const COLOR = Object.fromEntries(CLASSES.map((c) => [c.code, getComputedStyle(document.documentElement).getPropertyValue("--" + c.code).trim()]));
 const STATUS_TR = { tamam: "hasarlı", hasarsiz: "hasar yok", kapsam_disi: "yol görünmüyor" };
-const MIN_SIZE = 0.006;
+const MIN_SIZE = 0.006;  // görüntüye oranla en küçük şekil
+const CLOSE_PX = 14;     // ilk köşeye bu kadar yakın tıklanırsa çokgen kapanır
 
 const $ = (id) => document.getElementById(id);
-const state = { items: [], filter: "pending", current: null, boxes: [], saved: "[]", sel: -1, cls: "D00", drag: null };
+const state = {
+  items: [], filter: "pending", current: null,
+  shapes: [], saved: "[]", sel: -1, cls: "D00", tool: "poly",
+  draft: null,   // çizilmekte olan çokgen: { pts: [[x,y]...], hover: [x,y] }
+  drag: null,
+};
 
 // ---------- veri ----------
 async function api(path, opts) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `Hata (${res.status})`);
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Hata (${res.status})`);
   return data;
 }
 
@@ -163,46 +187,43 @@ function renderList() {
   const list = $("list");
   list.innerHTML = "";
   visibleItems().forEach((it) => {
-    const idx = state.items.indexOf(it) + 1;
     const el = document.createElement("div");
     el.className = "item" + (it.ad === state.current ? " cur" : "");
-    el.innerHTML = `<span class="dot ${it.durum || ""}"></span>#${idx}<small>${it.durum ? STATUS_TR[it.durum] : it.kutu_sayisi + " kutu"}</small>`;
+    el.innerHTML = `<span class="dot ${it.durum || ""}"></span>#${state.items.indexOf(it) + 1}<small>${it.durum ? STATUS_TR[it.durum] : it.sekil_sayisi + " şekil"}</small>`;
     el.title = it.ad;
     el.onclick = () => open(it.ad);
     list.appendChild(el);
   });
 }
 
+function isDirty() { return state.current && (state.draft || JSON.stringify(state.shapes) !== state.saved); }
+
 async function open(name) {
   if (name === state.current) return;
   if (isDirty() && !confirm("Kaydedilmemiş değişiklikler var. Kaydetmeden geçilsin mi?")) return;
   const d = await api(`/api/etiket/${encodeURIComponent(name)}`);
-  state.current = name;
-  state.boxes = d.kutular;
-  state.saved = JSON.stringify(d.kutular);
-  state.sel = -1;
+  Object.assign(state, { current: name, shapes: d.sekiller, saved: JSON.stringify(d.sekiller), sel: -1, draft: null, drag: null });
   $("wrap").hidden = false;
   $("doneBox")?.remove();
   $("img").src = `/api/etiket/${encodeURIComponent(name)}/gorsel`;
   const idx = state.items.findIndex((i) => i.ad === name) + 1;
-  msg(d.durum ? `#${idx} daha önce "${STATUS_TR[d.durum]}" olarak kaydedildi.` : `#${idx}: Modelin kutularını kontrol edin.`, d.durum ? "ok" : "");
+  msg(d.durum ? `#${idx} daha önce "${STATUS_TR[d.durum]}" olarak kaydedildi.` : `#${idx}: Modelin tahminlerini kontrol edin, gerekirse köşeleri düzeltin.`, d.durum ? "ok" : "");
   renderList();
   render();
 }
 
-function isDirty() { return state.current && JSON.stringify(state.boxes) !== state.saved; }
-
 async function save(durum) {
   if (!state.current) return;
-  if (durum === "tamam" && !state.boxes.length) durum = "hasarsiz";
+  if (state.draft) { msg("Önce çizdiğiniz çokgeni bitirin (Enter) ya da iptal edin (Esc).", "warn"); return; }
+  if (durum === "tamam" && !state.shapes.length) durum = "hasarsiz";
   try {
     await api(`/api/etiket/${encodeURIComponent(state.current)}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ durum, kutular: durum === "tamam" ? state.boxes : [] }),
+      body: JSON.stringify({ durum, sekiller: durum === "tamam" ? state.shapes : [] }),
     });
   } catch (e) { msg(e.message, "err"); return; }
-  if (durum !== "tamam") state.boxes = [];
-  state.saved = JSON.stringify(state.boxes);
+  if (durum !== "tamam") state.shapes = [];
+  state.saved = JSON.stringify(state.shapes);
   const prev = state.current;
   await loadSummary();
   goNext(prev);
@@ -220,8 +241,7 @@ function goNext(from) {
 
 function step(delta) {
   const vis = visibleItems();
-  const i = vis.findIndex((it) => it.ad === state.current);
-  const target = vis[i + delta];
+  const target = vis[vis.findIndex((it) => it.ad === state.current) + delta];
   if (target) open(target.ad);
 }
 
@@ -229,121 +249,224 @@ function finished() {
   state.current = null;
   $("wrap").hidden = true;
   $("stage").insertAdjacentHTML("beforeend", `<div class="done" id="doneBox">Tüm görüntüler incelendi.<br><br>Claude'a <b>"bitti"</b> yazabilirsiniz.</div>`);
-  msg("Bitti! Değişiklikleri görmek için 'Tümü' filtresine geçebilirsiniz.", "ok");
+  msg("Bitti! Kayıtları gözden geçirmek için 'Tümü' filtresine geçebilirsiniz.", "ok");
   renderList();
 }
 
-// ---------- çizim ----------
-function toCorners(b) { return { x1: b.x - b.w / 2, y1: b.y - b.h / 2, x2: b.x + b.w / 2, y2: b.y + b.h / 2 }; }
-function fromCorners(c, sinif) {
-  const x1 = clamp(Math.min(c.x1, c.x2)), x2 = clamp(Math.max(c.x1, c.x2));
-  const y1 = clamp(Math.min(c.y1, c.y2)), y2 = clamp(Math.max(c.y1, c.y2));
-  return { sinif, x: (x1 + x2) / 2, y: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 };
-}
+// ---------- geometri ----------
 const clamp = (v) => Math.max(0, Math.min(1, v));
+const r6 = (v) => Math.round(v * 1e6) / 1e6;
+function bbox(pts) {
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
+}
+function area(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]; a += x1 * y2 - x2 * y1; }
+  return Math.abs(a) / 2;
+}
+function tooSmall(pts) { const b = bbox(pts); return pts.length < 3 || b.x2 - b.x1 < MIN_SIZE || b.y2 - b.y1 < MIN_SIZE || area(pts) < 1e-6; }
+function rectPts(a, b) {
+  const x1 = Math.min(a[0], b[0]), x2 = Math.max(a[0], b[0]), y1 = Math.min(a[1], b[1]), y2 = Math.max(a[1], b[1]);
+  return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+}
+function overlayRect() { return $("overlay").getBoundingClientRect(); }
+function pointerPos(e) {
+  const r = overlayRect();
+  return [clamp((e.clientX - r.left) / r.width), clamp((e.clientY - r.top) / r.height)];
+}
+function pxDist(a, b) {
+  const r = overlayRect();
+  return Math.hypot((a[0] - b[0]) * r.width, (a[1] - b[1]) * r.height);
+}
+
+// ---------- çizim ----------
+const S = (v) => (v * 1000).toFixed(1);
+const ptsAttr = (pts) => pts.map((p) => `${S(p[0])},${S(p[1])}`).join(" ");
 
 function render() {
-  const ov = $("overlay");
-  ov.innerHTML = "";
-  state.boxes.forEach((b, i) => {
-    const c = toCorners(b);
-    const el = document.createElement("div");
-    el.className = "box" + (i === state.sel ? " sel" : "");
-    el.dataset.i = i;
-    Object.assign(el.style, {
-      left: `${c.x1 * 100}%`, top: `${c.y1 * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%`, borderColor: COLOR[b.sinif],
-    });
-    const name = CLASSES.find((k) => k.code === b.sinif)?.name || b.sinif;
-    el.innerHTML = `<span style="background:${COLOR[b.sinif]}">${b.sinif} ${name}</span>`;
-    if (i === state.sel) for (const h of ["nw", "ne", "sw", "se"]) el.insertAdjacentHTML("beforeend", `<div class="h ${h}" data-h="${h}"></div>`);
-    ov.appendChild(el);
+  let svg = "";
+  state.shapes.forEach((s, i) => {
+    const c = COLOR[s.sinif], sel = i === state.sel;
+    svg += `<polygon data-i="${i}" points="${ptsAttr(s.noktalar)}" fill="${c}" fill-opacity="${sel ? 0.32 : 0.16}" stroke="${c}" stroke-width="${sel ? 4 : 3}" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
   });
+  if (state.draft) {
+    const c = COLOR[state.cls], pts = state.draft.pts;
+    const line = state.draft.hover ? pts.concat([state.draft.hover]) : pts;
+    svg += `<polyline points="${ptsAttr(line)}" fill="${c}" fill-opacity="0.12" stroke="${c}" stroke-width="3" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+  }
+  if (state.drag?.mode === "rect") {
+    const c = COLOR[state.cls];
+    svg += `<polygon points="${ptsAttr(rectPts(state.drag.start, state.drag.end))}" fill="${c}" fill-opacity="0.12" stroke="${c}" stroke-width="3" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+  }
+  $("svg").innerHTML = svg;
+
+  const pos = (p) => `left:${p[0] * 100}%;top:${p[1] * 100}%`;
+  let marks = "";
+  state.shapes.forEach((s, i) => {
+    const b = bbox(s.noktalar), name = CLASSES.find((k) => k.code === s.sinif)?.name || s.sinif;
+    marks += `<div class="lbl" style="left:${b.x1 * 100}%;top:${b.y1 * 100}%;background:${COLOR[s.sinif]}">${s.sinif} ${name}</div>`;
+  });
+  if (state.sel >= 0 && !state.draft) {
+    const pts = state.shapes[state.sel].noktalar;
+    pts.forEach((p, k) => {
+      const q = pts[(k + 1) % pts.length];
+      marks += `<div class="m" data-m="${k}" style="${pos([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2])}" title="Sürükle: yeni köşe"></div>`;
+    });
+    pts.forEach((p, k) => { marks += `<div class="v" data-v="${k}" style="${pos(p)}" title="Sürükle: taşı · Sağ tık: sil"></div>`; });
+  }
+  if (state.draft) state.draft.pts.forEach((p, k) => { marks += `<div class="v${k === 0 ? " first" : ""}" style="${pos(p)};pointer-events:none"></div>`; });
+  $("marks").innerHTML = marks;
   renderToolbar();
 }
 
 function renderToolbar() {
-  const tb = $("toolbar");
-  const active = state.sel >= 0 ? state.boxes[state.sel].sinif : state.cls;
-  tb.innerHTML = CLASSES.map((c, i) =>
-    `<button class="cls${c.code === active ? " on" : ""}" style="border-color:${COLOR[c.code]};${c.code === active ? "color:" + COLOR[c.code] : ""}" data-c="${c.code}"><b style="background:${COLOR[c.code]}">${i + 1}</b>${c.code} ${c.name}</button>`
-  ).join("") + `<button id="bDel" ${state.sel < 0 ? "disabled" : ""} style="margin-left:auto">Seçili kutuyu sil <kbd>Del</kbd></button>`;
-  tb.querySelectorAll(".cls").forEach((b) => (b.onclick = () => setClass(b.dataset.c)));
+  const active = state.sel >= 0 ? state.shapes[state.sel].sinif : state.cls;
+  $("toolbar").innerHTML =
+    `<button class="${state.tool === "poly" ? "on" : ""}" data-t="poly">Çokgen <kbd>P</kbd></button>` +
+    `<button class="${state.tool === "rect" ? "on" : ""}" data-t="rect">Dikdörtgen <kbd>B</kbd></button><span class="sep"></span>` +
+    CLASSES.map((c, i) =>
+      `<button class="cls${c.code === active ? " on" : ""}" style="border-color:${COLOR[c.code]};${c.code === active ? "color:" + COLOR[c.code] : ""}" data-c="${c.code}"><b style="background:${COLOR[c.code]}">${i + 1}</b>${c.code} ${c.name}</button>`
+    ).join("") +
+    `<button id="bDel" ${state.sel < 0 ? "disabled" : ""} style="margin-left:auto">Seçili şekli sil <kbd>Del</kbd></button>`;
+  $("toolbar").querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => setTool(b.dataset.t)));
+  $("toolbar").querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => setClass(b.dataset.c)));
   $("bDel").onclick = removeSelected;
+}
+
+function setTool(t) {
+  if (state.draft) cancelDraft();
+  state.tool = t;
+  render();
+  msg(t === "poly" ? "Çokgen: hasarın kenarı boyunca tıklayın; ilk köşeye tıklayarak veya Enter ile bitirin." : "Dikdörtgen: sürükleyerek çizin.");
 }
 
 function setClass(code) {
   state.cls = code;
-  if (state.sel >= 0) state.boxes[state.sel].sinif = code;
+  if (state.sel >= 0) state.shapes[state.sel].sinif = code;
   render();
 }
 
 function removeSelected() {
   if (state.sel < 0) return;
-  state.boxes.splice(state.sel, 1);
+  state.shapes.splice(state.sel, 1);
   state.sel = -1;
   render();
-  msg("Kutu silindi. Bitince Kaydet'e basın.", "warn");
+  msg("Şekil silindi. Bitince Kaydet'e basın.", "warn");
 }
 
-function pointerPos(e) {
-  const r = $("overlay").getBoundingClientRect();
-  return { x: clamp((e.clientX - r.left) / r.width), y: clamp((e.clientY - r.top) / r.height) };
+function finishDraft() {
+  const d = state.draft;
+  if (!d) return;
+  if (d.pts.length < 3) { msg("Çokgen için en az 3 köşe gerekli.", "warn"); return; }
+  const pts = d.pts.map((p) => [r6(p[0]), r6(p[1])]);
+  state.draft = null;
+  if (tooSmall(pts)) { msg("Şekil çok küçük, eklenmedi.", "warn"); render(); return; }
+  state.shapes.push({ sinif: state.cls, noktalar: pts });
+  state.sel = state.shapes.length - 1;
+  render();
+  msg(`${state.cls} çokgeni eklendi (${pts.length} köşe). Sınıf yanlışsa 1-4 ile değiştirin.`, "warn");
 }
 
-$("overlay").addEventListener("pointerdown", (e) => {
+function cancelDraft() { state.draft = null; render(); msg("Çizim iptal edildi."); }
+
+const ov = $("overlay");
+ov.addEventListener("contextmenu", (e) => e.preventDefault());
+
+ov.addEventListener("pointerdown", (e) => {
   if (!state.current) return;
   e.preventDefault();
-  $("overlay").setPointerCapture(e.pointerId);
   const p = pointerPos(e);
-  const handle = e.target.dataset.h;
-  const boxEl = e.target.closest(".box");
-  if (handle) {
-    state.drag = { mode: "resize", h: handle, c: toCorners(state.boxes[state.sel]) };
-  } else if (boxEl) {
-    state.sel = +boxEl.dataset.i;
-    state.drag = { mode: "move", start: p, orig: { ...state.boxes[state.sel] } };
-    render();
-  } else {
-    state.sel = -1;
-    state.drag = { mode: "draw", start: p, c: { x1: p.x, y1: p.y, x2: p.x, y2: p.y } };
-    state.boxes.push(fromCorners(state.drag.c, state.cls));
-    state.drag.index = state.boxes.length - 1;
-    render();
-  }
-});
+  const t = e.target;
 
-$("overlay").addEventListener("pointermove", (e) => {
-  const d = state.drag;
-  if (!d) return;
-  const p = pointerPos(e);
-  if (d.mode === "draw") {
-    d.c.x2 = p.x; d.c.y2 = p.y;
-    state.boxes[d.index] = fromCorners(d.c, state.cls);
-  } else if (d.mode === "move") {
-    const b = state.boxes[state.sel], o = d.orig;
-    b.x = Math.max(o.w / 2, Math.min(1 - o.w / 2, o.x + p.x - d.start.x));
-    b.y = Math.max(o.h / 2, Math.min(1 - o.h / 2, o.y + p.y - d.start.y));
-  } else if (d.mode === "resize") {
-    if (d.h.includes("w")) d.c.x1 = p.x; else d.c.x2 = p.x;
-    if (d.h.includes("n")) d.c.y1 = p.y; else d.c.y2 = p.y;
-    state.boxes[state.sel] = fromCorners(d.c, state.boxes[state.sel].sinif);
+  // Çizim sürerken: her tıklama bir köşe ekler; ilk köşeye tıklamak çokgeni kapatır
+  if (state.draft) {
+    if (e.button !== 0) return;
+    const d = state.draft;
+    if (d.pts.length >= 3 && pxDist(p, d.pts[0]) <= CLOSE_PX) { finishDraft(); return; }
+    if (!d.pts.length || pxDist(p, d.pts[d.pts.length - 1]) > 2) d.pts.push(p);
+    render();
+    return;
+  }
+
+  if (t.dataset.v !== undefined) {
+    const k = +t.dataset.v, pts = state.shapes[state.sel].noktalar;
+    if (e.button === 2) {
+      if (pts.length > 3) { pts.splice(k, 1); render(); } else msg("Çokgende en az 3 köşe kalmalı.", "warn");
+      return;
+    }
+    ov.setPointerCapture(e.pointerId);
+    state.drag = { mode: "vertex", k };
+    return;
+  }
+  if (t.dataset.m !== undefined) {
+    const k = +t.dataset.m;
+    state.shapes[state.sel].noktalar.splice(k + 1, 0, p);
+    ov.setPointerCapture(e.pointerId);
+    state.drag = { mode: "vertex", k: k + 1 };
+    render();
+    return;
+  }
+  // Shift basılıysa mevcut şeklin üstünde de yeni çizim başlar (iç içe hasarlar için)
+  if (t.dataset.i !== undefined && e.button === 0 && !e.shiftKey) {
+    state.sel = +t.dataset.i;
+    ov.setPointerCapture(e.pointerId);
+    state.drag = { mode: "move", start: p, orig: state.shapes[state.sel].noktalar.map((q) => [...q]) };
+    render();
+    return;
+  }
+  if (e.button !== 0) return;
+  state.sel = -1;
+  if (state.tool === "rect") {
+    ov.setPointerCapture(e.pointerId);
+    state.drag = { mode: "rect", start: p, end: p };
+  } else {
+    state.draft = { pts: [p], hover: null };
+    msg("Köşeleri tıklayarak ekleyin. İlk (sarı) köşeye tıklayın, çift tıklayın ya da Enter ile bitirin. Backspace: son köşeyi geri al.");
   }
   render();
 });
 
-$("overlay").addEventListener("pointerup", () => {
+ov.addEventListener("pointermove", (e) => {
+  const p = pointerPos(e);
+  if (state.draft) { state.draft.hover = p; render(); return; }
+  const d = state.drag;
+  if (!d) return;
+  if (d.mode === "vertex") {
+    state.shapes[state.sel].noktalar[d.k] = p;
+  } else if (d.mode === "move") {
+    const b = bbox(d.orig);
+    const dx = Math.max(-b.x1, Math.min(1 - b.x2, p[0] - d.start[0]));
+    const dy = Math.max(-b.y1, Math.min(1 - b.y2, p[1] - d.start[1]));
+    state.shapes[state.sel].noktalar = d.orig.map((q) => [q[0] + dx, q[1] + dy]);
+  } else if (d.mode === "rect") {
+    d.end = p;
+  }
+  render();
+});
+
+ov.addEventListener("pointerup", () => {
   const d = state.drag;
   state.drag = null;
   if (!d) return;
-  if (d.mode === "draw") {
-    const b = state.boxes[d.index];
-    if (b.w < MIN_SIZE || b.h < MIN_SIZE) { state.boxes.splice(d.index, 1); }
-    else { state.sel = d.index; msg(`${b.sinif} kutusu eklendi. Sınıf yanlışsa 1-4 tuşlarıyla değiştirin.`, "warn"); }
-  } else if (d.mode === "resize") {
-    const b = state.boxes[state.sel];
-    if (b.w < MIN_SIZE || b.h < MIN_SIZE) removeSelected();
+  if (d.mode === "rect") {
+    const pts = rectPts(d.start, d.end).map((q) => [r6(q[0]), r6(q[1])]);
+    if (!tooSmall(pts)) { state.shapes.push({ sinif: state.cls, noktalar: pts }); state.sel = state.shapes.length - 1; msg(`${state.cls} dikdörtgeni eklendi. Köşelerini sürükleyerek yamuğa çevirebilirsiniz.`, "warn"); }
+  } else if (state.sel >= 0) {
+    const s = state.shapes[state.sel];
+    s.noktalar = s.noktalar.map((q) => [r6(clamp(q[0])), r6(clamp(q[1]))]);
+    if (tooSmall(s.noktalar)) removeSelected();
   }
   render();
+});
+
+ov.addEventListener("dblclick", (e) => {
+  if (!state.draft) return;
+  e.preventDefault();
+  // Çift tıklama iki köşe ekler; birbirine çok yakın son köşeleri ayıkla
+  const pts = state.draft.pts;
+  while (pts.length > 1 && pxDist(pts[pts.length - 1], pts[pts.length - 2]) < 6) pts.pop();
+  finishDraft();
 });
 
 function msg(text, kind = "") { const m = $("msg"); m.textContent = text; m.className = "msg " + kind; }
@@ -357,28 +480,38 @@ $("bNext").onclick = () => step(1);
 $("bReset").onclick = async () => {
   if (!state.current) return;
   const d = await api(`/api/etiket/${encodeURIComponent(state.current)}/sifirla`, { method: "POST" });
-  state.boxes = d.kutular; state.saved = JSON.stringify(d.kutular); state.sel = -1;
+  Object.assign(state, { shapes: d.sekiller, saved: JSON.stringify(d.sekiller), sel: -1, draft: null });
   await loadSummary(); render();
-  msg("Modelin ilk kutularına dönüldü.", "warn");
+  msg("Modelin ilk tahminine dönüldü.", "warn");
 };
 $("fPending").onclick = () => { state.filter = "pending"; $("fPending").classList.add("on"); $("fAll").classList.remove("on"); renderList(); };
 $("fAll").onclick = () => { state.filter = "all"; $("fAll").classList.add("on"); $("fPending").classList.remove("on"); renderList(); };
 
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key >= "1" && e.key <= "4") setClass(CLASSES[+e.key - 1].code);
-  else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeSelected(); }
-  else if (e.key === "Escape") { state.sel = -1; render(); }
-  else if (e.key === "Enter") { e.preventDefault(); save("tamam"); }
-  else if (e.key === "n" || e.key === "N") save("hasarsiz");
-  else if (e.key === "x" || e.key === "X") save("kapsam_disi");
-  else if (e.key === "ArrowRight") step(1);
-  else if (e.key === "ArrowLeft") step(-1);
+  const k = e.key;
+  if (k >= "1" && k <= "4") setClass(CLASSES[+k - 1].code);
+  else if (k === "p" || k === "P") setTool("poly");
+  else if (k === "b" || k === "B") setTool("rect");
+  else if (k === "Enter") { e.preventDefault(); state.draft ? finishDraft() : save("tamam"); }
+  else if (k === "Escape") { if (state.draft) cancelDraft(); else { state.sel = -1; render(); } }
+  else if (k === "Backspace") {
+    e.preventDefault();
+    if (state.draft) { state.draft.pts.pop(); if (!state.draft.pts.length) cancelDraft(); else render(); }
+    else removeSelected();
+  }
+  else if (k === "Delete") removeSelected();
+  else if (state.draft) return;
+  else if (k === "n" || k === "N") save("hasarsiz");
+  else if (k === "x" || k === "X") save("kapsam_disi");
+  else if (k === "ArrowRight") step(1);
+  else if (k === "ArrowLeft") step(-1);
 });
 window.addEventListener("beforeunload", (e) => { if (isDirty()) e.preventDefault(); });
 
 (async () => {
   try {
+    msg("Çokgen: hasarın kenarı boyunca tıklayın; ilk köşeye tıklayarak veya Enter ile bitirin.");
     const s = await loadSummary();
     const first = s.gorseller.find((i) => !i.durum);
     if (first) open(first.ad); else finished();

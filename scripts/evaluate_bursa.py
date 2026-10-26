@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.labeling import CLASSES, _read_yolo  # noqa: E402
+from app.labeling import CLASSES, bounding_box, format_shape, read_shapes  # noqa: E402
 
 RDD_REFERENCE = {"precision": 0.622, "recall": 0.578, "mAP50": 0.621, "mAP50-95": 0.316}
 
@@ -38,8 +38,9 @@ def collect_reviewed(label_dir: Path) -> tuple[list[dict], dict]:
     for img in images:
         status = states.get(img.name, {}).get("durum")
         if status in ("tamam", "hasarsiz"):
-            reviewed.append({"image": img, "status": status,
-                             "boxes": _read_yolo(img.with_suffix(".txt")) if status == "tamam" else []})
+            shapes = read_shapes(img.with_suffix(".txt")) if status == "tamam" else []
+            reviewed.append({"image": img, "status": status, "shapes": shapes,
+                             "boxes": [bounding_box(sh["noktalar"]) for sh in shapes]})
         elif status == "kapsam_disi":
             skipped["kapsam_disi"] += 1
         else:
@@ -54,7 +55,8 @@ def build_yolo_dataset(reviewed: list[dict], out: Path) -> Path:
     (out / "labels" / "test").mkdir(parents=True)
     for r in reviewed:
         shutil.copy2(r["image"], out / "images" / "test" / r["image"].name)
-        lines = [f"{CLASSES.index(b['sinif'])} {b['x']:.6f} {b['y']:.6f} {b['w']:.6f} {b['h']:.6f}" for b in r["boxes"]]
+        # Çokgenler segmentasyon formatında yazılır; tespit değerlendirmesinde Ultralytics bunları kutuya çevirir
+        lines = [format_shape(sh["sinif"], sh["noktalar"]) for sh in r["shapes"]]
         (out / "labels" / "test" / f"{r['image'].stem}.txt").write_text("\n".join(lines))
     yaml = out / "data.yaml"
     yaml.write_text(f"path: {out.resolve()}\ntrain: images/test\nval: images/test\ntest: images/test\n"
@@ -99,8 +101,8 @@ def main():
     reviewed, skipped = collect_reviewed(args.labels)
     if not reviewed:
         raise SystemExit("İncelenmiş görüntü yok. Önce http://localhost:8000/etiket sayfasında etiketleri kontrol edin.")
-    n_boxes = sum(len(r["boxes"]) for r in reviewed)
-    print(f"{len(reviewed)} görüntü ({n_boxes} hasar kutusu) değerlendirilecek; "
+    n_boxes = sum(len(r["shapes"]) for r in reviewed)
+    print(f"{len(reviewed)} görüntü ({n_boxes} hasar şekli) değerlendirilecek; "
           f"yol görünmeyen {skipped['kapsam_disi']}, incelenmemiş {skipped['incelenmemis']} görüntü dışarıda.")
 
     from ultralytics import YOLO

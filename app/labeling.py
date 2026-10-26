@@ -1,8 +1,15 @@
 """Yerel etiket düzeltme aracı: modelin ön-etiketlerini gözden geçirip düzeltmek için.
 
+Etiketler çokgen olarak saklanır; hasarın şekli köşe köşe işaretlenebilir.
+Dosya biçimi YOLO segmentasyon formatıdır (Ultralytics):
+    <sınıf> x1 y1 x2 y2 ... xn yn        (koordinatlar 0-1 arası, en az 3 köşe)
+Bu biçim hem segmentasyon modeli eğitiminde hem de (çokgenin çevreleyen kutusuna
+çevrilerek) nesne tespiti değerlendirmesinde doğrudan kullanılabilir.
+Eski kutu satırları (<sınıf> x y w h) okunurken 4 köşeli çokgene çevrilir.
+
 Klasör yapısı (LABEL_DIR):
     <ad>.jpg           görüntü
-    <ad>.txt           güncel etiket (YOLO: sınıf x_merkez y_merkez genişlik yükseklik, 0-1)
+    <ad>.txt           güncel etiket
     _model/<ad>.txt    modelin ilk tahmini ("modelin kutularına dön" için)
     _durum.json        her görüntünün inceleme durumu
 
@@ -18,24 +25,45 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 CLASSES = ["D00", "D10", "D20", "D40"]
 STATUSES = ("tamam", "hasarsiz", "kapsam_disi")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+MAX_POINTS = 200
 
 
-class Box(BaseModel):
+class Shape(BaseModel):
     sinif: str
-    x: float = Field(ge=0, le=1, description="Kutu merkezi x (0-1)")
-    y: float = Field(ge=0, le=1, description="Kutu merkezi y (0-1)")
-    w: float = Field(gt=0, le=1, description="Genişlik (0-1)")
-    h: float = Field(gt=0, le=1, description="Yükseklik (0-1)")
+    noktalar: list[list[float]] = Field(description="Köşeler [[x, y], ...], 0-1 arası, en az 3")
+
+    @field_validator("noktalar")
+    @classmethod
+    def _valid_points(cls, pts):
+        if not 3 <= len(pts) <= MAX_POINTS:
+            raise ValueError(f"Çokgen 3 ile {MAX_POINTS} arasında köşe içermeli.")
+        for p in pts:
+            if len(p) != 2 or not all(0 <= v <= 1 for v in p):
+                raise ValueError("Her köşe [x, y] biçiminde ve 0-1 arasında olmalı.")
+        if polygon_area(pts) <= 0:
+            raise ValueError("Çokgenin alanı sıfır olamaz.")
+        return pts
 
 
 class LabelUpdate(BaseModel):
     durum: str
-    kutular: list[Box] = []
+    sekiller: list[Shape] = []
+
+
+def polygon_area(pts: list[list[float]]) -> float:
+    n = len(pts)
+    return abs(sum(pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1] for i in range(n))) / 2
+
+
+def bounding_box(pts: list[list[float]]) -> dict:
+    """Çokgeni çevreleyen kutu (merkez x, y, genişlik, yükseklik)."""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return {"x": (min(xs) + max(xs)) / 2, "y": (min(ys) + max(ys)) / 2, "w": max(xs) - min(xs), "h": max(ys) - min(ys)}
 
 
 class LabelStore:
@@ -63,25 +91,25 @@ class LabelStore:
         return {
             "ad": name,
             "durum": self._states().get(name, {}).get("durum"),
-            "kutular": _read_yolo(path.with_suffix(".txt")),
-            "model_kutulari": _read_yolo(self.root / "_model" / f"{path.stem}.txt"),
+            "sekiller": read_shapes(path.with_suffix(".txt")),
         }
 
     def write(self, name: str, update: LabelUpdate) -> dict:
         if update.durum not in STATUSES:
             raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(STATUSES)}")
-        unknown = {b.sinif for b in update.kutular} - set(CLASSES)
+        unknown = {s.sinif for s in update.sekiller} - set(CLASSES)
         if unknown:
             raise HTTPException(422, f"Geçersiz sınıf: {', '.join(sorted(unknown))}")
-        if update.durum == "tamam" and not update.kutular:
-            raise HTTPException(422, "Kutu yoksa 'hasarsiz' olarak kaydedin.")
+        if update.durum == "tamam" and not update.sekiller:
+            raise HTTPException(422, "Şekil yoksa 'hasarsiz' olarak kaydedin.")
         path = self.image_path(name)
-        boxes = update.kutular if update.durum == "tamam" else []
-        lines = [f"{CLASSES.index(b.sinif)} {b.x:.6f} {b.y:.6f} {b.w:.6f} {b.h:.6f}" for b in boxes]
+        shapes = update.sekiller if update.durum == "tamam" else []
         with self._lock:
-            path.with_suffix(".txt").write_text("\n".join(lines), encoding="utf-8")
+            path.with_suffix(".txt").write_text("\n".join(format_shape(s.sinif, s.noktalar) for s in shapes),
+                                                encoding="utf-8")
             states = self._states()
-            states[name] = {"durum": update.durum, "guncelleme": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            states[name] = {"durum": update.durum,
+                            "guncelleme": datetime.now(timezone.utc).isoformat(timespec="seconds")}
             self._save_states(states)
         return self.read(name)
 
@@ -101,9 +129,8 @@ class LabelStore:
         states = self._states()
         items = []
         for name in self.images():
-            txt = (self.root / name).with_suffix(".txt")
             items.append({"ad": name, "durum": states.get(name, {}).get("durum"),
-                          "kutu_sayisi": len(_read_yolo(txt))})
+                          "sekil_sayisi": len(read_shapes((self.root / name).with_suffix(".txt")))})
         counts = {s: sum(i["durum"] == s for i in items) for s in STATUSES}
         counts["bekleyen"] = sum(i["durum"] is None for i in items)
         return {"gorseller": items, "ozet": counts, "siniflar": CLASSES}
@@ -119,16 +146,26 @@ class LabelStore:
         tmp.replace(p)
 
 
-def _read_yolo(path: Path) -> list[dict]:
+def format_shape(sinif: str, pts: list[list[float]]) -> str:
+    return f"{CLASSES.index(sinif)} " + " ".join(f"{x:.6f} {y:.6f}" for x, y in pts)
+
+
+def read_shapes(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    boxes = []
+    shapes = []
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split()
-        if len(parts) == 5:
-            c, x, y, w, h = int(parts[0]), *map(float, parts[1:])
-            boxes.append({"sinif": CLASSES[c], "x": x, "y": y, "w": w, "h": h})
-    return boxes
+        if len(parts) < 5:
+            continue
+        cls, vals = CLASSES[int(parts[0])], [float(v) for v in parts[1:]]
+        if len(vals) == 4:  # kutu: x_merkez y_merkez genişlik yükseklik
+            x, y, w, h = vals
+            pts = [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]]
+        else:
+            pts = [[vals[i], vals[i + 1]] for i in range(0, len(vals) - 1, 2)]
+        shapes.append({"sinif": cls, "noktalar": [[round(max(0.0, min(1.0, v)), 6) for v in p] for p in pts]})
+    return shapes
 
 
 def create_router(store: LabelStore) -> APIRouter:
