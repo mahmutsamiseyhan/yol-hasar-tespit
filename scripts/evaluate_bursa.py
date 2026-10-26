@@ -93,7 +93,8 @@ def image_level(reviewed: list[dict], predictions: dict[str, list[dict]], min_io
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--labels", type=Path, default=ROOT / "data" / "bursa_test" / "etiket")
-    ap.add_argument("--model", type=Path, default=ROOT / "models" / "best.pt")
+    ap.add_argument("--model", type=Path, default=ROOT / "models" / "best.pt",
+                    help="Tespit (best.pt) veya segmentasyon (best-seg.pt) modeli")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "bursa_test" / "degerlendirme")
     ap.add_argument("--conf", type=float, default=0.35, help="Uygulamadaki güven eşiği")
     args = ap.parse_args()
@@ -121,6 +122,10 @@ def main():
                                                "AP50": round(ap50, 3), "AP50-95": round(ap, 3)}
         detection = {"precision": round(m.box.mp, 3), "recall": round(m.box.mr, 3),
                      "mAP50": round(m.box.map50, 3), "mAP50-95": round(m.box.map, 3), "siniflar": per_class}
+        if model.task == "segment":
+            # Maske doğruluğu: elle çizilen çokgenlere göre (SAM sözde etiketlerine değil)
+            detection["maske"] = {"precision": round(m.seg.mp, 3), "recall": round(m.seg.mr, 3),
+                                  "mAP50": round(m.seg.map50, 3), "mAP50-95": round(m.seg.map, 3)}
 
     predictions = {}
     for r in reviewed:
@@ -138,6 +143,9 @@ def main():
     if detection:
         for k in ("precision", "recall", "mAP50", "mAP50-95"):
             print(f"  {k:<10} RDD {RDD_REFERENCE[k]:.3f}   Bursa {detection[k]:.3f}")
+        if "maske" in detection:
+            mk = detection["maske"]
+            print(f"  Maske (elle çizilen çokgenlere göre): mAP50 {mk['mAP50']:.3f}, mAP50-95 {mk['mAP50-95']:.3f}")
         for c, v in detection["siniflar"].items():
             print(f"  {c}: AP50 {v['AP50']:.3f}  (P {v['precision']:.3f}, R {v['recall']:.3f})")
     else:

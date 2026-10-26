@@ -143,3 +143,16 @@ def test_retention_purges_closed_issue_images(make_pipeline, settings):
     assert pl.purge_expired_media() == 1
     assert not image.exists()
     assert pl.repo.get_issue(p["id"])["image_path"] is None
+
+
+def test_segmentation_polygon_returned_and_drawn(make_pipeline, settings):
+    from app.detector import Detection
+
+    poly = [(220, 310), (430, 300), (450, 410), (240, 420)]
+    pl = make_pipeline(detections=[Detection("D40", 0.9, (220, 300, 450, 420), polygon=poly)])
+    res = pl.analyze(jpeg_bytes(), LAT, LON)
+    det = res["tespitler"][0]
+    assert det["cokgen"] == [list(p) for p in poly]
+    assert det["boyut_kaynagi"] == "cokgen" and det["boyut_olcusu"] == "alan"
+    stored = cv2.imread(str(settings.media_dir / res["goruntu_url"].split("/")[-1]))
+    assert stored is not None

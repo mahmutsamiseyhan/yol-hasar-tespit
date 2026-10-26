@@ -191,21 +191,35 @@ def _detection_out(item: dict) -> dict:
         "ad": CLASS_LABELS_TR.get(det.cls, det.cls),
         "guven": det.confidence,
         "kutu": [round(v, 1) for v in det.box],
+        "cokgen": [list(p) for p in det.polygon] if det.polygon else None,
         "siddet": round(item["severity"], 3),
         "boyut_katsayisi": round(item["size"].factor, 3),
+        "boyut_olcusu": item["size"].measure,
+        "boyut_kaynagi": item["size"].shape,
         "boyut_yontemi": item["size"].method,
         "alan_m2": item["size"].area_m2,
+        "uzunluk_m": item["size"].length_m,
     }
 
 
 def _annotate(image: np.ndarray, items: list[dict]) -> np.ndarray:
     out = image.copy()
     thickness = max(2, round(min(out.shape[:2]) / 300))
+    # Segmentasyon modelinde hasarın sınırı yarı saydam boyanır
+    fill = out.copy()
+    for item in items:
+        det: Detection = item["detection"]
+        if det.polygon:
+            cv2.fillPoly(fill, [det.outline.astype(np.int32)], CLASS_COLORS.get(det.cls, (200, 200, 200)))
+    out = cv2.addWeighted(fill, 0.35, out, 0.65, 0)
     for item in items:
         det: Detection = item["detection"]
         x1, y1, x2, y2 = (int(v) for v in det.box)
         color = CLASS_COLORS.get(det.cls, (200, 200, 200))
-        cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
+        if det.polygon:
+            cv2.polylines(out, [det.outline.astype(np.int32)], True, color, thickness, cv2.LINE_AA)
+        else:
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
         # OpenCV Türkçe karakter çizemez; etikette sınıf kodu kullanılır, adı arayüzde gösterilir
         label = f"{det.cls} {det.confidence:.0%}"
         scale = thickness / 3

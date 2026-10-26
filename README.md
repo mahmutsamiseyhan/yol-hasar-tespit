@@ -47,6 +47,30 @@ Hız: görüntü başına ~6 ms (4.5 ms çıkarım, NVIDIA L4).
 
 En zayıf sınıf çukur (D40): eğitim verisindeki en az örnekli sınıf ve uzaktan küçük görünüyor. Videoda bir çukur onlarca karede göründüğü için tek kare recall değerinin pratikteki etkisi daha düşüktür. Çukura özel ek veri ve Bursa verisiyle yeniden eğitim yol haritasındadır.
 
+### Bursa testi
+
+Mapillary'deki Bursa görüntülerinden 54'ü elle, çokgen çizilerek etiketlendi (17 hasarlı, 37 sağlam, 32 hasar).
+
+| | RDD2022 testi | Bursa testi |
+|---|---|---|
+| mAP50 | 0.621 | 0.302 |
+| Sağlam yolda yanlış alarm (görüntü, eşik 0.35) | | 3 / 37 |
+| Hasarlı yolda hasarı doğru yerde bulma (görüntü) | | 8 / 17 |
+
+Başka ülkelerin verisiyle eğitilen model Bursa'da yarı performansa düşüyor (alan farkı). Gözlenen hatalar: şerit çizgisi → boyuna çatlak, rögar kapağı → çukur, parke taşı → timsah sırtı, aşınmış asfalttaki çatlakları kaçırma. Örneklem küçük olduğu için sınıf bazında sonuç verilmemiştir.
+
+## Segmentasyon modeli (hasarın gerçek sınırı)
+
+Tespit modeli hasarın etrafına kutu çizer. Segmentasyon modeli hasarın sınırını çokgen olarak çizer; böylece öncelik puanındaki boyut kutudan değil hasarın kendisinden hesaplanır.
+
+RDD2022'de çokgen etiket olmadığı için kutular SAM2 ile çokgene çevrilir (`scripts/rdd_to_seg_sam.py`): maske kutuyla kırpılır, SAM nesneyi bulamadıysa ya da kutuyu tamamen doldurduysa insan kutusu korunur. Çekya örneğinde kutuların %86-100'ü çokgene çevrildi.
+
+Eğitim ve değerlendirme: [`notebooks/02_segmentasyon_colab.ipynb`](notebooks/02_segmentasyon_colab.ipynb). Çıkan `best-seg.pt` dosyası `models/` altına konduğunda uygulama onu otomatik kullanır.
+
+Kıyas iki ayrı ölçümle yapılır:
+- **Kutu doğruluğu, insan kutularına göre** (`scripts/compare_box_map.py`): iki model aynı test görüntülerinde Ultralytics'in tespit doğrulayıcısıyla ölçülür. Segmentasyonun kutu doğruluğunu bozup bozmadığını gösterir.
+- **Maske doğruluğu, elle çizilen çokgenlere göre** (`scripts/evaluate_bursa.py --model models/best-seg.pt`): SAM sözde etiketlerine değil, Bursa test setindeki insan çokgenlerine göre.
+
 ## Öncelik formülü
 
 ```
@@ -54,7 +78,9 @@ En zayıf sınıf çukur (D40): eğitim verisindeki en az örnekli sınıf ve uz
 Öncelik P = 100 × S × K_konum × B_bildirim                                              1–100
 
 w_sınıf   : D40 1.0 · D20 0.8 · D10 0.5 · D00 0.4      (Fen İşleri ayarlayabilir: CLASS_WEIGHTS)
-boyut     : kalibre araç kamerasında zemin alanı (m², homografi), diğerlerinde görüntü alan oranı
+boyut     : çatlaklarda (D00, D10) uzunluk, timsah sırtı ve çukurda (D20, D40) alan;
+            segmentasyon modelinde hasarın çokgeninden, tespit modelinde kutudan;
+            kalibre araç kamerasında metre / m² (homografi), diğerlerinde görüntüye oranla
 K_konum   : otoyol/devlet yolu 1.0 · ana arter 0.9 · tali 0.8 · toplayıcı 0.7 · ara sokak 0.55, okul/hastane yakını +0.1
 B_bildirim: 1 + 0.25 × ln(bildirim sayısı)
 ```

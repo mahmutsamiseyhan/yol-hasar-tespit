@@ -14,6 +14,13 @@ def _env_float(name: str, default: float) -> float:
     return float(os.getenv(name, default))
 
 
+def _default_model() -> Path:
+    """Segmentasyon modeli (hasarın gerçek sınırı) varsa onu, yoksa tespit modelini kullanır."""
+    models = Path(os.getenv("MODEL_DIR", ROOT_DIR / "models"))
+    seg = models / "best-seg.pt"
+    return seg if seg.exists() else models / "best.pt"
+
+
 def _env_json(name: str, default):
     raw = os.getenv(name)
     return json.loads(raw) if raw else default
@@ -47,7 +54,7 @@ DEFAULT_ROAD_WEIGHTS = {
 
 @dataclass
 class Settings:
-    model_path: Path = field(default_factory=lambda: Path(os.getenv("MODEL_PATH", ROOT_DIR / "models" / "best.pt")))
+    model_path: Path = field(default_factory=lambda: Path(os.getenv("MODEL_PATH") or _default_model()))
     conf_threshold: float = field(default_factory=lambda: _env_float("CONF_THRESHOLD", 0.35))
     iou_threshold: float = field(default_factory=lambda: _env_float("IOU_THRESHOLD", 0.5))
     imgsz: int = field(default_factory=lambda: int(os.getenv("IMGSZ", 640)))

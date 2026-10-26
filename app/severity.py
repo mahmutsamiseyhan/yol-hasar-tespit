@@ -4,7 +4,12 @@
     Öncelik P = 100 × S × K_konum × B_bildirim                                          (1–100)
 
 Model güven skoru şiddete katılmaz; yalnızca eşik (filtre) olarak kullanılır.
-Boyut, kalibrasyon varsa fiziksel alandan (m²), yoksa görüntüdeki alan oranından tahmin edilir.
+
+Boyut, hasarın türüne göre ölçülür:
+  - Çatlaklar (D00, D10): uzunluk. İnce bir çatlağın alanı küçüktür ama tehlikesi uzunluğundadır.
+  - Timsah sırtı ve çukur (D20, D40): alan.
+Segmentasyon modelinde ölçü hasarın gerçek sınırından (çokgen), tespit modelinde kutudan alınır.
+Kalibre araç kamerasında (homografi) metre / m², diğer durumlarda görüntüye oranla hesaplanır.
 """
 
 from __future__ import annotations
@@ -12,13 +17,17 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import cv2
 import numpy as np
 
-from .detector import Detection
+from .detector import Detection, polygon_area
 
-# Bu alanı kaplayan hasar "tam boyutlu" kabul edilir (boyut katsayısı = 1)
+# Bu ölçüye ulaşan hasar "tam boyutlu" kabul edilir (boyut katsayısı = 1)
 REF_AREA_M2 = 1.0
 REF_AREA_RATIO = 0.04
+REF_LENGTH_M = 3.0
+REF_LENGTH_RATIO = 0.35  # görüntü köşegenine oranla
+LENGTH_CLASSES = {"D00", "D10"}
 DEFAULT_CLASS_WEIGHT = 0.3  # modelin bilinmeyen bir sınıf döndürmesi durumunda
 MULTI_DAMAGE_STEP = 0.05
 MULTI_DAMAGE_CAP = 0.15
@@ -29,28 +38,49 @@ PRIORITY_LEVELS = [(70, "kritik"), (45, "yuksek"), (25, "orta"), (0, "dusuk")]
 @dataclass
 class SizeEstimate:
     factor: float  # 0–1
-    method: str  # "kalibrasyon" | "alan_orani"
+    method: str  # "kalibrasyon" | "alan_orani" | "uzunluk_orani"
     area_m2: float | None = None
+    length_m: float | None = None
+    measure: str = "alan"  # "alan" | "uzunluk"
+    shape: str = "kutu"  # "cokgen" | "kutu": ölçü hasarın sınırından mı, kutudan mı alındı
+
+
+def to_ground(pts: np.ndarray, homography: list) -> np.ndarray:
+    """Piksel noktalarını homografi ile zemine (metre) izdüşürür."""
+    H = np.asarray(homography, dtype=float)
+    homog = np.hstack([pts, np.ones((len(pts), 1))]) @ H.T
+    return (homog[:, :2] / homog[:, 2:3]).astype(np.float32)
 
 
 def ground_area_m2(box: tuple[float, float, float, float], homography: list) -> float:
     """Kutunun dört köşesini homografi ile zemine izdüşürüp alanını (m²) hesaplar."""
-    H = np.asarray(homography, dtype=float)
     x1, y1, x2, y2 = box
-    corners = np.array([[x1, y1, 1], [x2, y1, 1], [x2, y2, 1], [x1, y2, 1]], dtype=float).T
-    ground = H @ corners
-    xs, ys = ground[0] / ground[2], ground[1] / ground[2]
-    # Shoelace formülü
-    return float(0.5 * abs(np.dot(xs, np.roll(ys, 1)) - np.dot(ys, np.roll(xs, 1))))
+    corners = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=float)
+    return polygon_area(to_ground(corners, homography))
+
+
+def longest_extent(pts: np.ndarray) -> float:
+    """Şekli saran en küçük döndürülmüş dikdörtgenin uzun kenarı: eğri çatlaklarda da uzunluğa yakın."""
+    (_, _), (w, h), _ = cv2.minAreaRect(pts.reshape(-1, 1, 2).astype(np.float32))
+    return float(max(w, h))
 
 
 def estimate_size(det: Detection, img_w: int, img_h: int, homography: list | None = None) -> SizeEstimate:
+    pts = det.outline
+    shape = "cokgen" if det.polygon else "kutu"
+    if det.cls in LENGTH_CLASSES:
+        if homography is not None:
+            length = longest_extent(to_ground(pts, homography))
+            return SizeEstimate(min(1.0, length / REF_LENGTH_M), "kalibrasyon", length_m=round(length, 2),
+                                measure="uzunluk", shape=shape)
+        ratio = longest_extent(pts) / math.hypot(img_w, img_h)
+        return SizeEstimate(min(1.0, ratio / REF_LENGTH_RATIO), "uzunluk_orani", measure="uzunluk", shape=shape)
     if homography is not None:
-        area = ground_area_m2(det.box, homography)
-        return SizeEstimate(min(1.0, math.sqrt(area / REF_AREA_M2)), "kalibrasyon", round(area, 3))
+        area = polygon_area(to_ground(pts, homography))
+        return SizeEstimate(min(1.0, math.sqrt(area / REF_AREA_M2)), "kalibrasyon", round(area, 3), shape=shape)
     ratio = det.area / float(img_w * img_h)
     # Alan karesel büyüdüğü için karekök alınır: boyut katsayısı doğrusal ölçüye yakın davranır
-    return SizeEstimate(min(1.0, math.sqrt(ratio / REF_AREA_RATIO)), "alan_orani")
+    return SizeEstimate(min(1.0, math.sqrt(ratio / REF_AREA_RATIO)), "alan_orani", shape=shape)
 
 
 def detection_severity(det: Detection, size: SizeEstimate, class_weights: dict) -> float:

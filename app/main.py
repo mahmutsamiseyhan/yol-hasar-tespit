@@ -78,6 +78,7 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         return {
             "durum": "ok",
             "model_yuklu": getattr(detector, "available", True),
+            "model_turu": "segmentasyon" if "seg" in str(getattr(detector, "model_path", "")) else "tespit",
             "model_yolu": str(getattr(detector, "model_path", "")),
             "kvkk_dedektorleri": [d.name for d in pl.masker.detectors],
             "konum_baglami_yuklu": pl.context.loaded,
