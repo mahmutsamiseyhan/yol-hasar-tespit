@@ -11,6 +11,7 @@
     --brand: #0b5394; --brand-ink: #ffffff;
     --kritik: #c62828; --yuksek: #ef6c00; --orta: #f9a825; --dusuk: #2e7d32;
   }
+  [hidden] { display: none !important; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
@@ -48,6 +49,17 @@
   .legend-line { font-size: 11px; color: var(--muted); margin-top: -4px; }
   .live { font-size: 11px; opacity: .85; display: flex; align-items: center; gap: 6px; }
   .live i { width: 8px; height: 8px; border-radius: 50%; background: #69f0ae; display: inline-block; box-shadow: 0 0 0 0 rgba(105,240,174,.7); animation: pulse 2s infinite; }
+  .hbtn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.45); font-weight: 600; }
+  .hbtn:hover { background: rgba(255,255,255,.25); }
+  .follow { font-size: 11px; display: flex; align-items: center; gap: 4px; opacity: .9; cursor: pointer; }
+  .toasts { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1000; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }
+  .toast { background: #1c2430; color: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 13px; border-left: 5px solid #69f0ae; animation: tin .25s ease-out; cursor: pointer; }
+  .toast b { display: block; font-size: 14px; margin-bottom: 2px; }
+  @keyframes tin { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal { position: fixed; inset: 0; background: rgba(15,23,35,.55); z-index: 1100; display: grid; place-items: center; padding: 16px; }
+  .modal-box { background: #fff; border-radius: 14px; padding: 22px; width: min(420px, 100%); text-align: center; }
+  .modal-box img { width: 260px; max-width: 100%; height: auto; border: 0; margin: 10px auto; display: block; }
+  .modal-box code { display: block; font-size: 13px; background: #f4f6f9; padding: 8px; border-radius: 6px; word-break: break-all; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(105,240,174,.7); } 70% { box-shadow: 0 0 0 8px rgba(105,240,174,0); } 100% { box-shadow: 0 0 0 0 rgba(105,240,174,0); } }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
   .kv span:nth-child(odd) { color: var(--muted); }
@@ -73,7 +85,9 @@
     <div class="sub">Görüntü işleme + CBS ile hasar tespiti, önceliklendirme ve iş emri</div>
   </div>
   <div class="stats" id="stats"></div>
-  <div class="live" title="Harita ve iş kuyruğu 15 saniyede bir yenilenir"><i></i><span id="liveText">Canlı</span></div>
+  <button class="hbtn" id="openQr" type="button">Telefonla bildir</button>
+  <label class="follow" title="Yeni bildirim gelince harita o noktaya gitsin"><input type="checkbox" id="follow" checked>Takip</label>
+  <div class="live" title="Yeni bildirimler anında gelir"><i></i><span id="liveText">Canlı</span></div>
 </header>
 <main>
   <aside>
@@ -85,6 +99,7 @@
         <label for="source">Kaynak</label>
         <select id="source">
           <option value="vatandas">Vatandaş bildirimi</option>
+          <option value="saha_ekibi">Belediye saha ekibi (telefon)</option>
           <option value="saha_araci">Saha aracı (kalibre kamera)</option>
         </select>
         <div class="row">
@@ -104,10 +119,22 @@
   <div id="map"></div>
 </main>
 
+<div class="toasts" id="toasts"></div>
+<div class="modal" id="qrModal" hidden>
+  <div class="modal-box">
+    <h2 style="margin:0;font-size:18px">Telefonla bildir</h2>
+    <p style="margin:6px 0 0;font-size:13px;color:#5f6b7a">Kamerayla okutun, fotoğraf çekip gönderin. Bildirim bu ekrana anında düşer.</p>
+    <img id="qrImg" alt="Bildirim sayfası QR kodu">
+    <code id="qrUrl"></code>
+    <p id="qrWarn" class="notice warn" hidden style="text-align:left"></p>
+    <button id="closeQr" type="button" style="margin-top:12px">Kapat</button>
+  </div>
+</div>
 <script src="/static/vendor/leaflet.js"></script>
 <script>
 const LEVEL_COLORS = { kritik: "#c62828", yuksek: "#ef6c00", orta: "#f9a825", dusuk: "#2e7d32" };
 const LEVEL_TR = { kritik: "Kritik", yuksek: "Yüksek", orta: "Orta", dusuk: "Düşük" };
+const $ = (id) => document.getElementById(id);
 const STATUS_TR = { acik: "Açık", ekip_yonlendirildi: "Ekip yönlendirildi", onarildi: "Onarıldı", yanlis_tespit: "Yanlış tespit" };
 const ROAD_TR = { motorway: "Otoyol", trunk: "Devlet yolu", primary: "Ana arter", secondary: "Tali arter", tertiary: "Toplayıcı yol", local: "Ara sokak" };
 
@@ -192,7 +219,7 @@ async function loadIssues() {
   }
   renderQueue(open);
   loadStats();
-  $live.textContent = "Canlı · " + new Date().toLocaleTimeString("tr-TR");
+  $live.dataset.updated = new Date().toLocaleTimeString("tr-TR");
 }
 
 function renderQueue(features) {
@@ -240,6 +267,7 @@ document.getElementById("form").addEventListener("submit", async (e) => {
   if (lat && lon) { fd.append("lat", lat); fd.append("lon", lon); }
 
   btn.disabled = true; btn.textContent = "Analiz ediliyor…";
+  myRequest = true;
   try {
     const res = await fetch("/api/analyze-road", { method: "POST", body: fd });
     const data = await res.json();
@@ -251,6 +279,7 @@ document.getElementById("form").addEventListener("submit", async (e) => {
     out.innerHTML = `<div class="notice err">${esc(err.message)}</div>`;
   } finally {
     btn.disabled = false; btn.textContent = "Analiz et";
+    setTimeout(() => (myRequest = false), 1500);
   }
 });
 
@@ -326,7 +355,58 @@ function renderResult(d) {
   </div>`;
 }
 
-// Canlı güncelleme: açık bir pencere yokken harita ve kuyruk 15 saniyede bir yenilenir
+// ---------- Gerçek zamanlı olaylar (SSE) ----------
+const SOURCE_TR = { vatandas: "Vatandaş", saha_ekibi: "Saha ekibi", saha_araci: "Saha aracı" };
+let myRequest = false;  // bu paneldeki "Analiz et" kendi sonucunu zaten gösteriyor
+
+function toast(title, text, onClick, color) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  if (color) el.style.borderLeftColor = color;
+  el.innerHTML = `<b>${esc(title)}</b>${esc(text)}`;
+  el.onclick = () => { onClick && onClick(); el.remove(); };
+  $("toasts").prepend(el);
+  setTimeout(() => el.remove(), 9000);
+}
+
+function connectEvents() {
+  const es = new EventSource("/api/olaylar");
+  es.onopen = () => ($live.textContent = "Canlı · bağlı");
+  es.onerror = () => ($live.textContent = "Bağlantı yeniden kuruluyor…");
+  es.addEventListener("bildirim", async (e) => {
+    const d = JSON.parse(e.data);
+    if (myRequest) return;
+    await loadIssues();
+    const src = SOURCE_TR[d.kaynak] || d.kaynak;
+    if (d.hasar) {
+      const go = () => { const m = markers[d.id]; if (m) flyAndOpen(m.getLatLng(), m); };
+      toast(`Yeni bildirim · ${src}`, `${d.hasar_adi}, ${d.oncelik} puan (${LEVEL_TR[d.seviye]})${d.yol ? " · " + d.yol : ""}${d.birlesti ? " · mevcut kayda eklendi" : ""}`, go, LEVEL_COLORS[d.seviye]);
+      if ($("follow").checked) go();
+    } else {
+      toast(`Yeni bildirim · ${src}`, "Hasar tespit edilmedi.", () => map.flyTo([d.enlem, d.boylam], 17), "#9aa5b1");
+    }
+  });
+  es.addEventListener("durum", () => loadIssues());
+}
+
+// QR kod: telefonların erişebileceği adres (genel HTTPS adresi tanımlıysa o)
+$("openQr").onclick = async () => {
+  const h = await fetch("/health").then((r) => r.json()).catch(() => ({}));
+  const base = (h.genel_adres || location.origin).replace(/\/$/, "");
+  const url = base + "/bildir";
+  $("qrUrl").textContent = url;
+  $("qrImg").src = "/api/qr?metin=" + encodeURIComponent(url);
+  const local = /^(https?:\/\/)?(localhost|127\.|\[::1\])/.test(base);
+  $("qrWarn").hidden = !(local || base.startsWith("http://"));
+  $("qrWarn").textContent = local
+    ? "Bu adres yalnızca bu bilgisayarda çalışır. Telefonların erişmesi için genel bir HTTPS adresi gerekir (PUBLIC_URL)."
+    : "Telefonlarda konum ve kamera yalnızca https:// adreslerde çalışır.";
+  $("qrModal").hidden = false;
+};
+$("closeQr").onclick = () => ($("qrModal").hidden = true);
+$("qrModal").onclick = (e) => { if (e.target.id === "qrModal") $("qrModal").hidden = true; };
+
+// Yedek: olay bağlantısı koparsa açık pencere yokken harita ve kuyruk 15 saniyede bir yenilenir
 let popupOpen = false;
 map.on("popupopen", () => (popupOpen = true));
 map.on("popupclose", () => (popupOpen = false));
@@ -336,6 +416,7 @@ setInterval(async () => {
 }, 15000);
 
 loadIssues();
+connectEvents();
 </script>
 </body>
 </html>

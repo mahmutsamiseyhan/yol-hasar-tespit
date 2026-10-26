@@ -6,3 +6,4 @@ opencv-python-headless>=4.10
 pillow>=10.4
 shapely>=2.0
 ultralytics>=8.3
+qrcode>=7.4

@@ -23,7 +23,8 @@ from .repository import Repository
 from .severity import image_severity, priority_score
 
 
-SOURCES = ("vatandas", "saha_araci")
+# saha_ekibi: belediye personelinin telefonu; saha_araci: kalibre kameralı araç (homografi kullanılır)
+SOURCES = ("vatandas", "saha_ekibi", "saha_araci")
 MAX_CANDIDATES = 5
 LOW_LIGHT = 70  # ortalama parlaklık (0-255) bunun altındaysa ışık yetersiz sayılır
 PREVIEW_MAX_SIDE = 1280
@@ -53,7 +54,7 @@ class RoadDamagePipeline:
         settings.media_dir.mkdir(parents=True, exist_ok=True)
 
     def analyze(self, image_bytes: bytes, lat: float | None = None, lon: float | None = None,
-                source: str = "vatandas") -> dict:
+                source: str = "vatandas", accuracy_m: float | None = None) -> dict:
         if source not in SOURCES:
             raise AnalysisError(f"Geçersiz kaynak: {source}. Geçerli değerler: {', '.join(SOURCES)}")
         image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
@@ -84,7 +85,8 @@ class RoadDamagePipeline:
         ctx = self.context.lookup(lat, lon)
 
         base = {
-            "konum": {"enlem": lat, "boylam": lon, "kaynak": location_source},
+            "konum": {"enlem": lat, "boylam": lon, "kaynak": location_source,
+                      "dogruluk_m": round(accuracy_m) if accuracy_m is not None else None},
             "kvkk": mask_report.to_dict(),
             "tespitler": [_detection_out(i) for i in sev["items"]],
         }
@@ -97,6 +99,8 @@ class RoadDamagePipeline:
             "guven_esigi": self.settings.conf_threshold,
             "aday_esigi": self.settings.candidate_conf,
             "model": Path(str(getattr(self.detector, "model_path", "model"))).name,
+            "konum_dogrulugu_m": round(accuracy_m) if accuracy_m is not None else None,
+            "birlestirme_yaricapi_m": self.settings.merge_radius_m,
         }
         # Önizleme: kabul edilen tespitler düz, zayıf adaylar kesik çizgiyle. Diske yazılmaz (KVKK).
         preview = _annotate(masked, sev["items"], candidates[:MAX_CANDIDATES])
@@ -297,6 +301,14 @@ def _assessment(found: bool, detections: list[Detection], candidates: list[Detec
                       "eğitildi, sonuç güvenilirliği düşebilir."})
     if min(img["genislik"], img["yukseklik"]) < 480:
         notes.append({"tur": "uyari", "metin": "Çözünürlük düşük: küçük çatlaklar kaçırılabilir."})
+
+    acc = report.get("konum_dogrulugu_m")
+    if acc is not None and acc > report["birlestirme_yaricapi_m"]:
+        notes.append({"tur": "uyari", "metin": f"Konum doğruluğu düşük (±{acc} m): {report['birlestirme_yaricapi_m']:.0f} m "
+                      "birleştirme yarıçapından büyük, mükerrer kayıt eşleşmesi hatalı olabilir. Açık havada "
+                      "birkaç saniye bekleyip tekrar deneyin."})
+    elif acc is not None:
+        notes.append({"tur": "bilgi", "metin": f"Telefon konumu ±{acc} m doğrulukla alındı."})
 
     ctx = report["konum_baglami"]
     if not ctx.get("veri_kapsaminda", True):

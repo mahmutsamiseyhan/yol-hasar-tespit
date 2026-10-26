@@ -63,6 +63,8 @@ class Settings:
     context_path: Path = field(
         default_factory=lambda: Path(os.getenv("CONTEXT_PATH", ROOT_DIR / "data" / "bursa_context.geojson"))
     )
+    # Telefonların erişeceği genel HTTPS adresi (ör. tünel adresi); paneldeki QR kod bunu gösterir
+    public_url: str | None = field(default_factory=lambda: (os.getenv("PUBLIC_URL") or "").rstrip("/") or None)
     # Etiket düzeltme aracının çalıştığı klasör (görüntü + YOLO etiketleri)
     label_dir: Path = field(
         default_factory=lambda: Path(os.getenv("LABEL_DIR", ROOT_DIR / "data" / "bursa_test" / "etiket"))

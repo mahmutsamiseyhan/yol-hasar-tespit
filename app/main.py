@@ -6,14 +6,16 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import ROOT_DIR, Settings, get_settings
 from .context import RoadContext
 from .detector import YoloDetector
+from .events import EventBus, report_event
 from .geo import feature_collection
 from .labeling import LabelStore, create_router
 from .pipeline import AnalysisError, RoadDamagePipeline, issue_to_feature
@@ -63,6 +65,7 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.pipeline = pipeline
+    app.state.events = EventBus()
 
     def p() -> RoadDamagePipeline:
         return app.state.pipeline
@@ -81,6 +84,8 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
             "model_yolu": str(getattr(detector, "model_path", "")),
             "kvkk_dedektorleri": [d.name for d in pl.masker.detectors],
             "konum_baglami_yuklu": pl.context.loaded,
+            "canli_baglanti": app.state.events.subscriber_count,
+            "genel_adres": pl.settings.public_url,
         }
 
     @app.post("/api/analyze-road")
@@ -88,19 +93,43 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         image: UploadFile = File(..., description="Yol fotoğrafı (JPEG/PNG)"),
         lat: float | None = Form(None, description="Enlem (boşsa EXIF'ten okunur)"),
         lon: float | None = Form(None, description="Boylam (boşsa EXIF'ten okunur)"),
-        source: str = Form("vatandas", description="vatandas | saha_araci"),
+        source: str = Form("vatandas", description="vatandas | saha_ekibi | saha_araci"),
+        konum_dogrulugu_m: float | None = Form(None, description="Telefon GPS doğruluğu (metre)"),
     ):
         data = await image.read()
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "Dosya 15 MB sınırını aşıyor.")
         pl = p()
         try:
-            result = pl.analyze(data, lat=lat, lon=lon, source=source)
+            # Analiz birkaç saniye sürebilir; olay döngüsünü kilitlememek için ayrı iş parçacığında çalışır
+            result = await run_in_threadpool(pl.analyze, data, lat, lon, source, konum_dogrulugu_m)
         except AnalysisError as e:
             raise HTTPException(422, str(e)) from e
         except FileNotFoundError as e:
             raise HTTPException(503, str(e)) from e
+        app.state.events.publish(report_event(result, source))
         return result
+
+    @app.get("/api/olaylar", include_in_schema=False)
+    async def events(request: Request):
+        """Gerçek zamanlı olay akışı (Server-Sent Events): panel yeni bildirimleri anında görür."""
+        return StreamingResponse(app.state.events.stream(request.is_disconnected), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/qr", include_in_schema=False)
+    def qr(metin: str):
+        """Mobil bildirim sayfasının adresi için QR kod (SVG)."""
+        if len(metin) > 500:
+            raise HTTPException(422, "Metin çok uzun.")
+        import qrcode
+        import qrcode.image.svg
+
+        svg = qrcode.make(metin, image_factory=qrcode.image.svg.SvgPathImage, border=2).to_string(encoding="unicode")
+        return Response(svg, media_type="image/svg+xml")
+
+    @app.get("/bildir", include_in_schema=False)
+    def mobile_report_page():
+        return FileResponse(STATIC_DIR / "bildir.html")
 
     @app.get("/api/issues")
     def list_issues(durum: str | None = None, min_oncelik: int = 0):
@@ -123,7 +152,10 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
             raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(ALL_STATUSES)}")
         if not p().repo.get_issue(issue_id):
             raise HTTPException(404, "Arıza bulunamadı.")
-        return issue_to_feature(p().repo.update_issue(issue_id, status=body.durum))
+        feature = issue_to_feature(p().repo.update_issue(issue_id, status=body.durum))
+        app.state.events.publish({"tip": "durum", "id": issue_id, "durum": body.durum,
+                                  "is_emri_no": feature["properties"]["is_emri_no"]})
+        return feature
 
     @app.get("/api/stats")
     def stats():
