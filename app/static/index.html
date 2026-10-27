@@ -10,12 +10,14 @@
     --bg: #f4f6f9; --panel: #ffffff; --ink: #1c2430; --muted: #5f6b7a; --line: #dfe4ea;
     --brand: #0b5394; --brand-ink: #ffffff;
     --kritik: #c62828; --yuksek: #ef6c00; --orta: #f9a825; --dusuk: #2e7d32;
+    /* Grafikler: doğrulanmış kategorik palet (mavi, turuncu), çizgi ve eksen tonları */
+    --series-1: #2a78d6; --series-2: #eb6834; --grid: #e1e0d9; --axis: #c3c2b7; --axis-ink: #898781;
   }
   [hidden] { display: none !important; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
-  header { display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: var(--brand); color: var(--brand-ink); }
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: var(--brand); color: var(--brand-ink); }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
   header .sub { opacity: .8; font-size: 12px; }
   .stats { margin-left: auto; display: flex; gap: 14px; font-size: 12px; }
@@ -26,7 +28,7 @@
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 10px; }
   label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
   input, select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
-  .row { display: flex; gap: 8px; } .row > div { flex: 1; }
+  .row { display: flex; gap: 8px; } .row > div { flex: 1; min-width: 0; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
   button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 6px 10px; }
   button.primary { width: 100%; margin-top: 12px; padding: 9px; background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
@@ -49,16 +51,24 @@
   .legend-line { font-size: 11px; color: var(--muted); margin-top: -4px; }
   .live { font-size: 11px; opacity: .85; display: flex; align-items: center; gap: 6px; }
   .live i { width: 8px; height: 8px; border-radius: 50%; background: #69f0ae; display: inline-block; box-shadow: 0 0 0 0 rgba(105,240,174,.7); animation: pulse 2s infinite; }
-  .hbtn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.45); font-weight: 600; }
+  .hbtn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.45); font-weight: 600; white-space: nowrap; }
   .hbtn:hover { background: rgba(255,255,255,.25); }
-  .follow { font-size: 11px; display: flex; align-items: center; gap: 4px; opacity: .9; cursor: pointer; }
+  .user { font-size: 12px; opacity: .9; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .user button { background: none; border: 1px solid rgba(255,255,255,.45); color: #fff; font-size: 12px; padding: 3px 8px; }
+  .follow { font-size: 11px; display: flex; align-items: center; gap: 4px; opacity: .9; cursor: pointer; margin: 0; color: #fff; }
+  .follow input { width: auto; }
   .toasts { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1000; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }
   .toast { background: #1c2430; color: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 13px; border-left: 5px solid #69f0ae; animation: tin .25s ease-out; cursor: pointer; }
   .toast b { display: block; font-size: 14px; margin-bottom: 2px; }
   @keyframes tin { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
   .modal { position: fixed; inset: 0; background: rgba(15,23,35,.55); z-index: 1100; display: grid; place-items: center; padding: 16px; }
-  .modal-box { background: #fff; border-radius: 14px; padding: 22px; width: min(420px, 100%); text-align: center; }
-  .modal-box img { width: 260px; max-width: 100%; height: auto; border: 0; margin: 10px auto; display: block; }
+  .modal-box { background: #fff; border-radius: 14px; padding: 22px; width: min(420px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .modal-box.center { text-align: center; }
+  .modal-box.wide { width: min(980px, 100%); }
+  .modal-box h2.mt { margin: 0; font-size: 18px; color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .modal-head .grow { flex: 1; }
+  #qrImg { width: 260px; max-width: 100%; height: auto; border: 0; margin: 10px auto; display: block; }
   .modal-box code { display: block; font-size: 13px; background: #f4f6f9; padding: 8px; border-radius: 6px; word-break: break-all; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(105,240,174,.7); } 70% { box-shadow: 0 0 0 8px rgba(105,240,174,0); } 100% { box-shadow: 0 0 0 0 rgba(105,240,174,0); } }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
@@ -72,10 +82,47 @@
   .queue-title { font-weight: 600; } .queue-meta { font-size: 12px; color: var(--muted); }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .actions button { font-size: 12px; padding: 4px 8px; }
+  .filters .row { margin-bottom: 2px; }
+  .filters select { padding: 6px; }
+  .export { display: flex; gap: 6px; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .export a { font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--brand); text-decoration: none; background: #fff; }
+  .export .count { margin-left: auto; }
   .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 12px; line-height: 1.8; }
   .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
-  .popup { width: 260px; } .popup h3 { margin: 0 0 4px; font-size: 14px; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height: auto; } .stats { display: none; } }
+  .popup { width: 280px; } .popup h3 { margin: 0 0 4px; font-size: 14px; }
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .ba figure { margin: 0; min-width: 0; }
+  .ba img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); margin: 4px 0 0; display: block; }
+  .ba figcaption { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  #repairPreview { width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
+  .check-inline { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .check-inline input { width: auto; }
+  /* İstatistik */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font-size: 24px; font-weight: 700; line-height: 1.2; }
+  .tile .k { font-size: 12px; color: var(--muted); }
+  .tile .s { font-size: 11px; color: var(--muted); }
+  .charts { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  .chart { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; position: relative; min-width: 0; }
+  .chart h3 { margin: 0; font-size: 14px; } .chart .sub { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart svg text { font-size: 11px; fill: var(--axis-ink); font-variant-numeric: tabular-nums; }
+  .hbars { display: grid; gap: 6px; font-size: 12px; }
+  .hbar { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; }
+  .hbar .lab { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar .track { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .hbar .bar { height: 14px; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .hbar .val { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tip { position: absolute; pointer-events: none; background: #1c2430; color: #fff; font-size: 12px; padding: 6px 8px; border-radius: 6px; white-space: nowrap; z-index: 2; }
+  .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height: auto; }
+    .stats, .sub { display: none; } header { flex-wrap: wrap; } .charts { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -85,9 +132,11 @@
     <div class="sub">Görüntü işleme + CBS ile hasar tespiti, önceliklendirme ve iş emri</div>
   </div>
   <div class="stats" id="stats"></div>
+  <button class="hbtn" id="openStats" type="button">İstatistik</button>
   <button class="hbtn" id="openQr" type="button">Telefonla bildir</button>
   <label class="follow" title="Yeni bildirim gelince harita o noktaya gitsin"><input type="checkbox" id="follow" checked>Takip</label>
   <div class="live" title="Yeni bildirimler anında gelir"><i></i><span id="liveText">Canlı</span></div>
+  <div class="user" id="user" hidden><span id="userName"></span><button id="logout" type="button">Çıkış</button></div>
 </header>
 <main>
   <aside>
@@ -111,6 +160,25 @@
       </form>
       <div id="result" class="result"></div>
     </section>
+    <section class="filters">
+      <h2>Filtre</h2>
+      <div class="row">
+        <div><label for="fIlce">İlçe</label><select id="fIlce"><option value="">Tümü</option></select></div>
+        <div><label for="fSinif">Hasar türü</label><select id="fSinif">
+          <option value="">Tümü</option><option value="D40">Çukur</option><option value="D20">Timsah sırtı çatlak</option>
+          <option value="D00">Boyuna çatlak</option><option value="D10">Enine çatlak</option></select></div>
+      </div>
+      <label for="fDurum">Durum</label>
+      <select id="fDurum">
+        <option value="">Tümü (kapananlar haritada gri)</option>
+        <option value="acik,ekip_yonlendirildi">Yalnızca açık işler</option>
+        <option value="acik">Açık, ekip bekliyor</option>
+        <option value="ekip_yonlendirildi">Ekip yönlendirildi</option>
+        <option value="onarildi">Onarıldı</option>
+        <option value="yanlis_tespit">Yanlış tespit</option>
+      </select>
+      <div class="export">İndir: <a id="dlGeo" href="#" download>GeoJSON</a><a id="dlCsv" href="#" download>CSV</a><span class="count" id="count"></span></div>
+    </section>
     <section>
       <h2>İş kuyruğu (önceliğe göre)</h2>
       <div id="queue"><div class="hint">Henüz açık arıza yok.</div></div>
@@ -121,8 +189,8 @@
 
 <div class="toasts" id="toasts"></div>
 <div class="modal" id="qrModal" hidden>
-  <div class="modal-box">
-    <h2 style="margin:0;font-size:18px">Telefonla bildir</h2>
+  <div class="modal-box center">
+    <h2 class="mt">Telefonla bildir</h2>
     <p style="margin:6px 0 0;font-size:13px;color:#5f6b7a">Kamerayla okutun, fotoğraf çekip gönderin. Bildirim bu ekrana anında düşer.</p>
     <img id="qrImg" alt="Bildirim sayfası QR kodu">
     <code id="qrUrl"></code>
@@ -130,13 +198,62 @@
     <button id="closeQr" type="button" style="margin-top:12px">Kapat</button>
   </div>
 </div>
+
+<div class="modal" id="repairModal" hidden>
+  <div class="modal-box">
+    <div class="modal-head"><h2 class="mt grow">Onarım kaydı</h2><button type="button" data-close="repairModal">Kapat</button></div>
+    <div id="repairInfo" class="hint" style="margin-top:0"></div>
+    <form id="repairForm">
+      <label for="repairImage">Onarılmış yolun fotoğrafı (zorunlu)</label>
+      <input id="repairImage" type="file" accept="image/*" capture="environment" required>
+      <img id="repairPreview" hidden alt="Onarım fotoğrafı önizlemesi">
+      <label class="check-inline"><input type="checkbox" id="repairLoc">Bu cihazın konumunu ekle (yanlış noktanın fotoğraflanmasını yakalar)</label>
+      <button class="primary" id="repairSubmit" type="submit">Onarımı kaydet ve kapat</button>
+      <div class="hint">Fotoğraf kaydedilmeden önce yüz ve plakalar bulanıklaştırılır. Model fotoğrafta hasar kalıp kalmadığını kontrol eder; karar sizde kalır.</div>
+    </form>
+    <div id="repairResult"></div>
+  </div>
+</div>
+
+<div class="modal" id="statsModal" hidden>
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <h2 class="mt grow">İstatistik</h2>
+      <select id="sGun" style="width:auto"><option value="7">Son 7 gün</option><option value="30" selected>Son 30 gün</option><option value="90">Son 90 gün</option></select>
+      <button type="button" data-close="statsModal">Kapat</button>
+    </div>
+    <div class="hint" id="sScope" style="margin:-6px 0 12px"></div>
+    <div class="tiles" id="sTiles"></div>
+    <div class="charts">
+      <div class="chart" id="dailyChart">
+        <h3>Günlük bildirim ve onarım</h3>
+        <div class="chart-legend"><span><i style="background:var(--series-1)"></i>Bildirim</span><span><i style="background:var(--series-2)"></i>Onarılan arıza</span></div>
+        <div id="dailySvg"></div>
+      </div>
+      <div style="display:grid;gap:16px;align-content:start;min-width:0">
+        <div class="chart"><h3>Açık arızalar: hasar türü</h3><div class="sub">Adet</div><div class="hbars" id="classBars"></div></div>
+        <div class="chart"><h3>Açık arızalar: ilçe</h3><div class="sub">Adet</div><div class="hbars" id="districtBars"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/static/vendor/leaflet.js"></script>
 <script>
 const LEVEL_COLORS = { kritik: "#c62828", yuksek: "#ef6c00", orta: "#f9a825", dusuk: "#2e7d32" };
 const LEVEL_TR = { kritik: "Kritik", yuksek: "Yüksek", orta: "Orta", dusuk: "Düşük" };
+const CLASS_TR = { D40: "Çukur", D20: "Timsah sırtı çatlak", D00: "Boyuna çatlak", D10: "Enine çatlak" };
 const $ = (id) => document.getElementById(id);
 const STATUS_TR = { acik: "Açık", ekip_yonlendirildi: "Ekip yönlendirildi", onarildi: "Onarıldı", yanlis_tespit: "Yanlış tespit" };
 const ROAD_TR = { motorway: "Otoyol", trunk: "Devlet yolu", primary: "Ana arter", secondary: "Tali arter", tertiary: "Toplayıcı yol", local: "Ara sokak" };
+
+// Oturum düştüyse (süre doldu, sunucu yeniden başladı) giriş sayfasına dön
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) { location.href = "/giris?sonra=/"; throw new Error("Oturum sona erdi."); }
+  return res;
+}
+const getJson = (url) => api(url).then((r) => r.json());
 
 const map = L.map("map").setView([40.1950, 29.0300], 13);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -146,13 +263,14 @@ const layer = L.layerGroup().addTo(map);
 const layerAnalysis = L.layerGroup().addTo(map);
 const $live = document.getElementById("liveText");
 const markers = {};
+const features = {};
 let pickMarker = null;
 
 const legend = L.control({ position: "bottomright" });
 legend.onAdd = () => {
   const d = L.DomUtil.create("div", "legend");
   d.innerHTML = Object.entries(LEVEL_TR).map(([k, v]) => `<div><i style="background:${LEVEL_COLORS[k]}"></i>${v}</div>`).join("")
-    + `<div style="color:#5f6b7a">Daire boyutu = bildirim sayısı</div>`;
+    + `<div><i style="background:#9aa5b1"></i>Kapandı</div><div style="color:#5f6b7a">Daire boyutu = bildirim sayısı</div>`;
   return d;
 };
 legend.addTo(map);
@@ -166,6 +284,7 @@ map.on("click", (e) => {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const badge = (lvl, score) => `<span class="badge lvl-${lvl}">${score} · ${LEVEL_TR[lvl] || lvl}</span>`;
+const fmtDate = (ts) => ts ? new Date(ts).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" }) : "-";
 
 function roadText(p) {
   const road = ROAD_TR[p.yol_sinifi] || p.yol_sinifi || "-";
@@ -177,31 +296,71 @@ function scoreDetail(s) {
   return `Şiddet ${s.siddet} × Konum ${s.konum_katsayisi} × Bildirim ${s.bildirim_carpani} × 100`;
 }
 
+function repairBlock(p) {
+  const o = p.onarim;
+  if (!o) return "";
+  const k = o.kontrol;
+  const note = k ? `<div class="notice ${k.sonuc === "temiz" ? "ok" : "warn"}" style="font-size:12px">${(k.notlar || []).map(esc).join(" ")}</div>` : "";
+  return `<div class="ba">
+      <figure><figcaption>Önce</figcaption>${p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Onarım öncesi">` : `<div class="hint">Görsel yok</div>`}</figure>
+      <figure><figcaption>Sonra · ${esc(fmtDate(o.tarih))}</figcaption>${o.goruntu_url ? `<img src="${esc(o.goruntu_url)}" alt="Onarım sonrası">` : `<div class="hint">Fotoğrafsız kapatıldı</div>`}</figure>
+    </div>${note}`;
+}
+
 function popupHtml(f) {
   const p = f.properties;
   const pois = (p.yakin_kritik_tesisler || []).map((t) => `${esc(t.tur)} ${t.ad ? "(" + esc(t.ad) + ")" : ""} ${t.mesafe_m} m`).join("<br>");
+  const closed = p.durum === "onarildi" || p.durum === "yanlis_tespit";
+  const actions = closed
+    ? `<button onclick="setStatus(${p.id}, 'acik')">Yeniden aç</button>`
+    : `${p.durum === "acik" ? `<button onclick="setStatus(${p.id}, 'ekip_yonlendirildi')">Ekip yönlendir</button>` : ""}
+       <button onclick="openRepair(${p.id})">Onarıldı (fotoğrafla)</button>
+       <button onclick="setStatus(${p.id}, 'yanlis_tespit')">Yanlış tespit</button>`;
   return `<div class="popup">
     <h3>${esc(p.hasar_adi)} <small style="color:#5f6b7a">${esc(p.hasar_sinifi)}</small></h3>
     ${badge(p.oncelik_seviyesi, p.oncelik_puani)}
-    ${p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Tespit görseli">` : ""}
+    ${p.durum === "onarildi" ? repairBlock(p) : (p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Tespit görseli">` : "")}
     <div class="kv">
       <span>İş emri</span><span>${esc(p.is_emri_no)}</span>
       <span>Durum</span><span>${STATUS_TR[p.durum] || esc(p.durum)}</span>
       <span>Bildirim</span><span>${p.bildirim_sayisi}</span>
       <span>Yol</span><span>${roadText(p)}</span>
+      ${p.ilce ? `<span>İlçe</span><span>${esc(p.ilce)}</span>` : ""}
       ${pois ? `<span>Yakında</span><span>${pois}</span>` : ""}
+      <span>Açılış</span><span>${esc(fmtDate(p.olusturma))}</span>
       <span>Skor</span><span style="font-size:12px">${scoreDetail(p.skor_detayi)}</span>
     </div>
-    <div class="actions">
-      <button onclick="setStatus(${p.id}, 'ekip_yonlendirildi')">Ekip yönlendir</button>
-      <button onclick="setStatus(${p.id}, 'onarildi')">Onarıldı</button>
-      <button onclick="setStatus(${p.id}, 'yanlis_tespit')">Yanlış tespit</button>
-    </div>
+    <div class="actions">${actions}</div>
   </div>`;
 }
 
+// ---------- Filtre ----------
+function filterParams(includeStatus = true) {
+  const q = new URLSearchParams();
+  if ($("fIlce").value) q.set("ilce", $("fIlce").value);
+  if ($("fSinif").value) q.set("sinif", $("fSinif").value);
+  if (includeStatus && $("fDurum").value) q.set("durum", $("fDurum").value);
+  return q;
+}
+
+function updateExportLinks() {
+  for (const [id, fmt] of [["dlGeo", "geojson"], ["dlCsv", "csv"]]) {
+    const q = filterParams(); q.set("bicim", fmt);
+    $(id).href = "/api/disa-aktar?" + q.toString();
+  }
+}
+
+async function loadDistricts() {
+  const { ilceler } = await getJson("/api/ilceler");
+  const sel = $("fIlce"), cur = sel.value;
+  sel.innerHTML = `<option value="">Tümü</option>` + ilceler.map((n) => `<option>${esc(n)}</option>`).join("");
+  sel.value = cur;
+}
+
+for (const id of ["fIlce", "fSinif", "fDurum"]) $(id).addEventListener("change", () => { updateExportLinks(); loadIssues(); });
+
 async function loadIssues() {
-  const fc = await fetch("/api/issues").then((r) => r.json());
+  const fc = await getJson("/api/issues?" + filterParams().toString());
   layer.clearLayers();
   const open = [];
   for (const f of fc.features) {
@@ -212,26 +371,28 @@ async function loadIssues() {
       radius: 7 + Math.min(10, Math.log2(p.bildirim_sayisi) * 3),
       color: "#fff", weight: 2,
       fillColor: closed ? "#9aa5b1" : LEVEL_COLORS[p.oncelik_seviyesi], fillOpacity: closed ? 0.5 : 0.9,
-    }).bindPopup(popupHtml(f), { maxWidth: 290 });
+    }).bindPopup(popupHtml(f), { maxWidth: 310 });
     m.addTo(layer);
     markers[p.id] = m;
+    features[p.id] = f;
     if (!closed) open.push(f);
   }
+  $("count").textContent = `${fc.features.length} kayıt`;
   renderQueue(open);
   loadStats();
   $live.dataset.updated = new Date().toLocaleTimeString("tr-TR");
 }
 
-function renderQueue(features) {
+function renderQueue(list) {
   const q = document.getElementById("queue");
-  if (!features.length) { q.innerHTML = `<div class="hint">Henüz açık arıza yok.</div>`; return; }
-  q.innerHTML = features.map((f) => {
+  if (!list.length) { q.innerHTML = `<div class="hint">${filterParams(false).toString() ? "Bu filtrede açık arıza yok." : "Henüz açık arıza yok."}</div>`; return; }
+  q.innerHTML = list.map((f) => {
     const p = f.properties;
     return `<div class="queue-item" data-id="${p.id}">
       <div class="queue-score" style="background:${LEVEL_COLORS[p.oncelik_seviyesi]}">${p.oncelik_puani}</div>
       <div>
         <div class="queue-title">${esc(p.hasar_adi)} · ${roadText(p)}</div>
-        <div class="queue-meta">${esc(p.is_emri_no)} · ${p.bildirim_sayisi} bildirim · ${STATUS_TR[p.durum]}</div>
+        <div class="queue-meta">${esc(p.is_emri_no)}${p.ilce ? " · " + esc(p.ilce) : ""} · ${p.bildirim_sayisi} bildirim · ${STATUS_TR[p.durum]}</div>
       </div>
     </div>`;
   }).join("");
@@ -242,7 +403,7 @@ function renderQueue(features) {
 }
 
 async function loadStats() {
-  const s = await fetch("/api/stats").then((r) => r.json());
+  const s = await getJson("/api/stats");
   const lv = s.acik_oncelik_seviyeleri || {};
   document.getElementById("stats").innerHTML = [
     ["Kritik", lv.kritik || 0], ["Yüksek", lv.yuksek || 0], ["Açık toplam", Object.values(lv).reduce((a, b) => a + b, 0)],
@@ -251,11 +412,63 @@ async function loadStats() {
 }
 
 async function setStatus(id, durum) {
-  await fetch(`/api/issues/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ durum }) });
+  await api(`/api/issues/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ durum }) });
   map.closePopup();
   loadIssues();
 }
 
+// ---------- Onarım kanıtı ----------
+let repairId = null;
+function openRepair(id) {
+  repairId = id;
+  const p = features[id].properties;
+  map.closePopup();
+  $("repairInfo").textContent = `${p.is_emri_no} · ${p.hasar_adi} · ${p.yol_adi || ROAD_TR[p.yol_sinifi] || ""}`;
+  $("repairForm").reset(); $("repairForm").hidden = false;
+  $("repairPreview").hidden = true; $("repairResult").innerHTML = "";
+  $("repairModal").hidden = false;
+}
+
+$("repairImage").onchange = (e) => {
+  const f = e.target.files[0];
+  $("repairPreview").hidden = !f;
+  if (f) $("repairPreview").src = URL.createObjectURL(f);
+};
+
+function currentPosition() {
+  return new Promise((resolve) => {
+    if (!window.isSecureContext || !navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition((p) => resolve(p.coords), () => resolve(null), { enableHighAccuracy: true, timeout: 10000 });
+  });
+}
+
+$("repairForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("repairSubmit");
+  btn.disabled = true; btn.textContent = "Kontrol ediliyor…";
+  try {
+    const fd = new FormData();
+    fd.append("image", $("repairImage").files[0]);
+    if ($("repairLoc").checked) {
+      const c = await currentPosition();
+      if (c) { fd.append("lat", c.latitude); fd.append("lon", c.longitude); }
+    }
+    const res = await api(`/api/issues/${repairId}/onarim`, { method: "POST", body: fd });
+    const d = await res.json();
+    if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Kaydedilemedi");
+    const k = d.kontrol;
+    $("repairForm").hidden = true;
+    $("repairResult").innerHTML = `<div class="notice ${k.sonuc === "temiz" ? "ok" : "warn"}">Kayıt kapatıldı. ${k.notlar.map(esc).join(" ")}</div>
+      ${repairBlock(d.ariza.properties)}`;
+    await loadIssues();
+  } catch (err) {
+    $("repairResult").innerHTML = `<div class="notice err">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Onarımı kaydet ve kapat";
+  }
+});
+
+// ---------- Yeni bildirim (panelden) ----------
 document.getElementById("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = document.getElementById("submit");
@@ -269,10 +482,11 @@ document.getElementById("form").addEventListener("submit", async (e) => {
   btn.disabled = true; btn.textContent = "Analiz ediliyor…";
   myRequest = true;
   try {
-    const res = await fetch("/api/analyze-road", { method: "POST", body: fd });
+    const res = await api("/api/analyze-road", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Analiz başarısız");
     out.innerHTML = renderResult(data);
+    await loadDistricts();
     await loadIssues();
     showAnalysisPoint(data);
   } catch (err) {
@@ -299,14 +513,15 @@ function showAnalysisPoint(d) {
   const lat = d.konum.enlem, lon = d.konum.boylam;
   if (analysisMarker) layerAnalysis.removeLayer(analysisMarker);
   if (pickMarker) { map.removeLayer(pickMarker); pickMarker = null; }
-  if (d.ariza) {
+  if (d.ariza && markers[d.ariza.properties.id]) {
     const m = markers[d.ariza.properties.id];
     flyAndOpen(m.getLatLng(), m);
     return;
   }
   const karar = (d.degerlendirme || []).find((n) => n.tur === "karar");
+  const title = d.ariza ? "Kayıt açıldı (filtre dışında)" : "Son analiz: hasar yok";
   analysisMarker = L.circleMarker([lat, lon], { radius: 10, color: "#0b5394", weight: 2, dashArray: "4 3", fillColor: "#2e7d32", fillOpacity: 0.35 })
-    .bindPopup(`<div class="popup"><h3>Son analiz: hasar yok</h3>${d.onizleme ? `<img src="${d.onizleme}" alt="Analiz önizlemesi">` : ""}<div style="font-size:12px">${esc(karar ? karar.metin : "")}</div></div>`, { maxWidth: 290 })
+    .bindPopup(`<div class="popup"><h3>${title}</h3>${d.onizleme ? `<img src="${d.onizleme}" alt="Analiz önizlemesi">` : ""}<div style="font-size:12px">${esc(karar ? karar.metin : "")}</div></div>`, { maxWidth: 290 })
     .addTo(layerAnalysis);
   flyAndOpen(L.latLng(lat, lon), analysisMarker);
 }
@@ -323,7 +538,8 @@ function renderResult(d) {
       ? `<div class="notice warn">15 m içinde açık kayıt bulundu: yeni iş emri açılmadı, mevcut kayıt güncellendi (${p.bildirim_sayisi}. bildirim).</div>`
       : `<div class="notice ok">Yeni arıza kaydı açıldı: ${esc(p.is_emri_no)}</div>`)
       + (d.kritik_oncelik ? `<div class="notice err">Kritik öncelik: ${esc(p.is_emri_no)} iş kuyruğunun en üstünde.</div>` : "")
-      + `<div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>`;
+      + `<div>${badge(p.oncelik_seviyesi, p.oncelik_puani)} <span class="hint">${scoreDetail(p.skor_detayi)}</span></div>`
+      + (d.takip_kodu ? `<div class="hint">Bildirene verilen takip kodu: <b>${esc(d.takip_kodu)}</b> · <a href="${esc(d.takip_url)}" target="_blank" rel="noopener">takip sayfası</a></div>` : "");
   }
   const img = d.onizleme || d.goruntu_url;
   const notes = (d.degerlendirme || []).slice().sort((x, y) => NOTE_ORDER[x.tur] - NOTE_ORDER[y.tur])
@@ -340,6 +556,7 @@ function renderResult(d) {
     <div class="kv">
       <span>Koordinat</span><span>${d.konum.enlem.toFixed(6)}, ${d.konum.boylam.toFixed(6)} (${d.konum.kaynak === "exif" ? "fotoğraf GPS" : "harita / elle"})</span>
       <span>Yol</span><span>${roadText(ctx)}</span>
+      ${ctx.ilce ? `<span>İlçe</span><span>${esc(ctx.ilce)}</span>` : ""}
       <span>Yakında</span><span>${pois}</span>
       <span>Konum katsayısı</span><span>${ctx.konum_katsayisi ?? "-"}${ctx.veri_kapsaminda === false ? " (veri kapsamı dışında)" : ""}</span>
     </div>
@@ -354,6 +571,108 @@ function renderResult(d) {
     ${kvkk}
   </div>`;
 }
+
+// ---------- İstatistik ----------
+function fmtHours(h) {
+  if (h == null) return "-";
+  if (h < 1) return `${Math.round(h * 60)} dk`;
+  if (h < 48) return `${h.toFixed(1).replace(".", ",")} sa`;
+  return `${(h / 24).toFixed(1).replace(".", ",")} gün`;
+}
+
+async function loadDashboard() {
+  const q = filterParams(false); q.set("gun", $("sGun").value);
+  const s = await getJson("/api/istatistik?" + q.toString());
+  const scope = [$("fIlce").value, CLASS_TR[$("fSinif").value]].filter(Boolean);
+  $("sScope").textContent = scope.length ? `Filtre: ${scope.join(", ")} (soldaki filtreden)` : "Tüm ilçeler ve hasar türleri";
+  const open = (s.durum.acik || 0) + (s.durum.ekip_yonlendirildi || 0);
+  const repairedInPeriod = s.gunluk.reduce((a, d) => a + d.onarilan, 0);
+  const reportsInPeriod = s.gunluk.reduce((a, d) => a + d.bildirim, 0);
+  $("sTiles").innerHTML = [
+    ["Açık arıza", open, `${s.acik_seviye.kritik || 0} kritik · ${s.durum.ekip_yonlendirildi || 0} ekipte`],
+    ["Bildirim", reportsInPeriod, `son ${s.gun_sayisi} gün · toplam ${s.toplam_bildirim}`],
+    ["Onarılan", repairedInPeriod, `son ${s.gun_sayisi} gün · toplam ${s.durum.onarildi || 0}`],
+    ["Ort. ekip yönlendirme", fmtHours(s.ekip_yonlendirme_suresi.ortalama_saat), `bildirimden itibaren · ${s.ekip_yonlendirme_suresi.adet} kayıt`],
+    ["Ort. onarım süresi", fmtHours(s.onarim_suresi.ortalama_saat), `medyan ${fmtHours(s.onarim_suresi.medyan_saat)} · ${s.onarim_suresi.adet} kayıt`],
+    ["Yanlış tespit", s.durum.yanlis_tespit || 0, "yeniden eğitimde kullanılır"],
+  ].map(([k, v, sub]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(sub)}</div></div>`).join("");
+  drawDaily(s.gunluk);
+  drawHBars($("classBars"), Object.entries(s.acik_sinif).map(([k, v]) => [CLASS_TR[k] || k, v]));
+  drawHBars($("districtBars"), Object.entries(s.acik_ilce));
+}
+
+function niceMax(v) {
+  if (v <= 4) return Math.max(1, v);
+  const step = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * step >= v) return m * step;
+  return 10 * step;
+}
+
+function barPath(x, y, w, h, r) {
+  // Üstü 4px yuvarlatılmış, tabanı düz sütun
+  if (h <= 0) return "";
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+
+function drawDaily(days) {
+  const box = $("dailySvg");
+  const W = Math.max(320, box.clientWidth), H = 220, m = { t: 8, r: 6, b: 24, l: 30 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = niceMax(Math.max(1, ...days.map((d) => Math.max(d.bildirim, d.onarilan))));
+  const band = iw / days.length;
+  const bw = Math.max(2, Math.min(10, (band - 4) / 2));
+  const y = (v) => m.t + ih - (v / max) * ih;
+  const ticks = max <= 4 ? Array.from({ length: max + 1 }, (_, i) => i) : [0, max / 4, max / 2, (3 * max) / 4, max];
+  const labelEvery = Math.ceil(days.length / 7);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Günlük bildirim ve onarılan arıza sayısı">`;
+  for (const t of ticks) {
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? "var(--axis)" : "var(--grid)"}" stroke-width="1"/>`;
+    s += `<text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${Number.isInteger(t) ? t : t.toFixed(1)}</text>`;
+  }
+  days.forEach((d, i) => {
+    const x0 = m.l + i * band + (band - (2 * bw + 2)) / 2;
+    s += `<path d="${barPath(x0, y(d.bildirim), bw, m.t + ih - y(d.bildirim), 4)}" fill="var(--series-1)"/>`;
+    s += `<path d="${barPath(x0 + bw + 2, y(d.onarilan), bw, m.t + ih - y(d.onarilan), 4)}" fill="var(--series-2)"/>`;
+    if ((days.length - 1 - i) % labelEvery === 0) {
+      const lab = new Date(d.tarih + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+      s += `<text x="${m.l + i * band + band / 2}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+    }
+    s += `<rect class="hit" data-i="${i}" x="${m.l + i * band}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>`;
+  });
+  s += `</svg><div class="tip" hidden></div>`;
+  box.innerHTML = s;
+  box.style.position = "relative";
+  const tip = box.querySelector(".tip");
+  box.querySelectorAll(".hit").forEach((r) => {
+    r.addEventListener("mouseenter", () => {
+      const d = days[+r.dataset.i];
+      const lab = new Date(d.tarih + "T12:00:00").toLocaleDateString("tr-TR", { weekday: "short", day: "numeric", month: "long" });
+      tip.innerHTML = `<b>${lab}</b><br><i style="background:var(--series-1)"></i>Bildirim ${d.bildirim}<br><i style="background:var(--series-2)"></i>Onarılan ${d.onarilan}`;
+      tip.hidden = false;
+      const bx = (+r.getAttribute("x") + band / 2) / W * box.clientWidth;
+      tip.style.left = Math.min(box.clientWidth - tip.offsetWidth, Math.max(0, bx - tip.offsetWidth / 2)) + "px";
+      tip.style.top = "0px";
+      r.setAttribute("fill", "rgba(11,83,148,.06)");
+    });
+    r.addEventListener("mouseleave", () => { tip.hidden = true; r.setAttribute("fill", "transparent"); });
+  });
+}
+
+function drawHBars(el, entries) {
+  if (!entries.length) { el.innerHTML = `<div class="empty">Açık arıza yok.</div>`; return; }
+  const max = Math.max(...entries.map(([, v]) => v));
+  el.innerHTML = entries.map(([k, v]) => `<div class="hbar" title="${esc(k)}: ${v}">
+      <span class="lab">${esc(k)}</span>
+      <span class="track"><span class="bar" style="width:calc(${(v / max) * 100}% - 28px)"></span><span class="val">${v}</span></span>
+    </div>`).join("");
+}
+
+$("openStats").onclick = async () => { $("statsModal").hidden = false; await loadDashboard(); };
+$("sGun").onchange = loadDashboard;
+document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => ($(b.dataset.close).hidden = true)));
+for (const id of ["statsModal", "repairModal", "qrModal"]) $(id).addEventListener("click", (e) => { if (e.target.id === id) $(id).hidden = true; });
+window.addEventListener("resize", () => { if (!$("statsModal").hidden) loadDashboard(); });
 
 // ---------- Gerçek zamanlı olaylar (SSE) ----------
 const SOURCE_TR = { vatandas: "Vatandaş", saha_ekibi: "Saha ekibi", saha_araci: "Saha aracı" };
@@ -377,6 +696,7 @@ function connectEvents() {
     const d = JSON.parse(e.data);
     if (myRequest) return;
     await loadIssues();
+    if (!$("statsModal").hidden) loadDashboard();
     const src = SOURCE_TR[d.kaynak] || d.kaynak;
     if (d.hasar) {
       const go = () => { const m = markers[d.id]; if (m) flyAndOpen(m.getLatLng(), m); };
@@ -386,7 +706,7 @@ function connectEvents() {
       toast(`Yeni bildirim · ${src}`, "Hasar tespit edilmedi.", () => map.flyTo([d.enlem, d.boylam], 17), "#9aa5b1");
     }
   });
-  es.addEventListener("durum", () => loadIssues());
+  es.addEventListener("durum", () => { loadIssues(); if (!$("statsModal").hidden) loadDashboard(); });
 }
 
 // QR kod: telefonların erişebileceği adres (genel HTTPS adresi tanımlıysa o)
@@ -404,17 +724,26 @@ $("openQr").onclick = async () => {
   $("qrModal").hidden = false;
 };
 $("closeQr").onclick = () => ($("qrModal").hidden = true);
-$("qrModal").onclick = (e) => { if (e.target.id === "qrModal") $("qrModal").hidden = true; };
+
+// Oturum: kullanıcı adı ve çıkış
+fetch("/api/oturum").then((r) => r.json()).then((s) => {
+  if (!s.giris_gerekli) return;
+  $("userName").textContent = s.kullanici || "";
+  $("user").hidden = false;
+});
+$("logout").onclick = async () => { await fetch("/api/cikis", { method: "POST" }); location.href = "/giris"; };
 
 // Yedek: olay bağlantısı koparsa açık pencere yokken harita ve kuyruk 15 saniyede bir yenilenir
 let popupOpen = false;
 map.on("popupopen", () => (popupOpen = true));
 map.on("popupclose", () => (popupOpen = false));
 setInterval(async () => {
-  if (document.hidden || popupOpen) return;
+  if (document.hidden || popupOpen || !$("repairModal").hidden) return;
   try { await loadIssues(); } catch (_) { /* bağlantı geçici olarak koptuysa sonraki turda tekrar dener */ }
 }, 15000);
 
+updateExportLinks();
+loadDistricts();
 loadIssues();
 connectEvents();
 </script>

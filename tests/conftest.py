@@ -65,6 +65,8 @@ def settings(tmp_path):
     s.db_path = tmp_path / "test.db"
     s.camera_homography = None
     s.class_conf_thresholds = {}  # makinedeki models/esikler.json testleri etkilemesin
+    s.admin_users = {}  # giriş testleri kendi kullanıcısını tanımlar
+    s.districts_path = None
     return s
 
 

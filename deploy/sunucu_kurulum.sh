@@ -42,7 +42,17 @@ else
 fi
 mkdir -p "$DIR/models"
 [ -f "$DIR/models/best.pt" ] || { echo "HATA: $DIR/models/best.pt yok. Önce model dosyasını kopyalayın."; exit 1; }
-printf 'DOMAIN="%s"\nPUBLIC_URL="%s"\n' "$DOMAIN" "$PUBLIC_URL" > "$DIR/deploy/.env"
+# Yönetici şifresi ve oturum anahtarı ilk kurulumda üretilir, sonraki çalıştırmalarda korunur
+ENV_FILE="$DIR/deploy/.env"
+old() { [ -f "$ENV_FILE" ] && sed -n "s/^$1='\(.*\)'$/\1/p" "$ENV_FILE" || true; }
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(old ADMIN_PASSWORD)}"
+NEW_PASSWORD=0
+if [ -z "$ADMIN_PASSWORD" ]; then ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=')"; NEW_PASSWORD=1; fi
+SECRET_KEY="$(old SECRET_KEY)"; SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}"
+umask 077
+printf "DOMAIN='%s'\nPUBLIC_URL='%s'\nADMIN_PASSWORD='%s'\nSECRET_KEY='%s'\n" \
+  "$DOMAIN" "$PUBLIC_URL" "$ADMIN_PASSWORD" "$SECRET_KEY" > "$ENV_FILE"
+umask 022
 
 echo "==> Uygulama ve HTTPS başlatılıyor (ilk derleme birkaç dakika sürer)"
 cd "$DIR/deploy"
@@ -50,7 +60,13 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 echo "==> Sağlık kontrolü"
 for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null "https://$FIRST_HOST/health"; then echo "Hazır: $PUBLIC_URL"; exit 0; fi
+  if curl -fsS -o /dev/null "https://$FIRST_HOST/health"; then
+    echo "Hazır: $PUBLIC_URL  (panel girişi: kullanıcı 'yonetici')"
+    if [ "$NEW_PASSWORD" = 1 ]; then
+      echo "Yönetici şifresi üretildi ve $ENV_FILE dosyasına yazıldı. Görmek için: sudo grep ADMIN_PASSWORD $ENV_FILE"
+    fi
+    exit 0
+  fi
   sleep 5
 done
 echo "Uygulama henüz yanıt vermiyor. Kayıtlar: docker compose -f $DIR/deploy/docker-compose.prod.yml logs --tail 50"

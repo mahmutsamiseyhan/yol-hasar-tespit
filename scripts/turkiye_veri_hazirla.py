@@ -154,7 +154,7 @@ def main():
         scale = min(1.0, MAX_SIDE / max(h, w))
         if scale < 1:
             img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-        res = model.predict(img, conf=MIN_CONF, imgsz=640, verbose=False)[0]
+        res = model.predict(img, conf=MIN_CONF, verbose=False)  # modelin eğitim boyutu[0]
         dets = [(int(c), float(p), b) for c, p, b in zip(res.boxes.cls.tolist(), res.boxes.conf.tolist(),
                                                           res.boxes.xywhn.tolist())]
         kind = classify(dets)

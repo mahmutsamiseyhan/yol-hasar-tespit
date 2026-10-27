@@ -31,3 +31,14 @@ def test_road_region_detections_are_shifted_back_to_full_frame(monkeypatch):
     out = det.detect(np.zeros((2000, 1500, 3), np.uint8))
     assert calls == [(2000, 640, 0), (1000, 960, 1000)]
     assert out[0].box == (10, 1020, 60, 1070)
+
+
+def test_input_size_defaults_to_the_size_the_model_was_trained_with(monkeypatch):
+    det = YoloDetector("yok.pt", imgsz=None)
+
+    class FakeModel:
+        overrides = {"imgsz": 800}
+
+    monkeypatch.setattr(det, "_load", lambda: FakeModel())
+    assert det.input_size() == 800
+    assert YoloDetector("yok.pt", imgsz=640).input_size() == 640  # açıkça verilen boyut modeli yüklemez

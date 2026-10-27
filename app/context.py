@@ -10,7 +10,7 @@ import json
 import logging
 from pathlib import Path
 
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, shape
 from shapely.strtree import STRtree
 
 from .geo import LocalProjection
@@ -27,8 +27,33 @@ POI_LABELS_TR = {
 }
 
 
+class Districts:
+    """Nokta -> ilçe adı. Veri scripts/fetch_osm_districts.py ile bir kez çekilir (data/bursa_ilceler.geojson)."""
+
+    def __init__(self, geojson: dict):
+        feats = [f for f in geojson.get("features", []) if f.get("properties", {}).get("ilce")]
+        self.names = [f["properties"]["ilce"] for f in feats]
+        self._polys = [shape(f["geometry"]) for f in feats]
+        self._tree = STRtree(self._polys) if self._polys else None
+
+    @classmethod
+    def from_file(cls, path: Path | None) -> "Districts":
+        if not path or not Path(path).exists():
+            log.warning("İlçe sınırları yok (%s); ilçe filtresi boş kalacak.", path)
+            return cls({})
+        return cls(json.loads(Path(path).read_text(encoding="utf-8")))
+
+    def lookup(self, lat: float, lon: float) -> str | None:
+        if self._tree is None:
+            return None
+        hits = self._tree.query(Point(lon, lat), predicate="intersects")
+        return self.names[int(hits[0])] if len(hits) else None
+
+
 class RoadContext:
-    def __init__(self, geojson: dict, road_weights: dict, poi_radius_m: float, poi_bonus: float):
+    def __init__(self, geojson: dict, road_weights: dict, poi_radius_m: float, poi_bonus: float,
+                 districts: Districts | None = None):
+        self.districts = districts
         self.road_weights = road_weights
         self.poi_radius_m = poi_radius_m
         self.poi_bonus = poi_bonus
@@ -55,7 +80,8 @@ class RoadContext:
         self._poi_tree = STRtree(self._pois) if self._pois else None
 
     @classmethod
-    def from_file(cls, path: Path, **kwargs) -> "RoadContext":
+    def from_file(cls, path: Path, districts_path: Path | None = None, **kwargs) -> "RoadContext":
+        kwargs["districts"] = Districts.from_file(districts_path)
         if not Path(path).exists():
             log.warning("Bağlam verisi yok (%s); tüm noktalar 'local' yol kabul edilecek.", path)
             return cls({"features": []}, **kwargs)
@@ -106,6 +132,7 @@ class RoadContext:
             "yakin_kritik_tesisler": nearby[:3],
             "konum_katsayisi": round(weight, 3),
             "veri_kapsaminda": self.covers(lat, lon),
+            "ilce": self.districts.lookup(lat, lon) if self.districts else None,
         }
 
 

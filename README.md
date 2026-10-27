@@ -32,34 +32,50 @@ flowchart LR
 | Arayüz | Leaflet haritası, fotoğraf yükleme, önceliğe göre iş kuyruğu, saha geri bildirimi, ayrıntılı analiz raporu | `app/static/index.html` |
 | Mobil bildirim | `/bildir`: telefon kamerası, zorunlu GPS konumu (doğruluk gösterilir), KVKK onayı, gönderim öncesi küçültme; vatandaş veya saha ekibi | `app/static/bildir.html` |
 | Canlı panel | Yeni bildirimler ve durum değişiklikleri panele anında düşer (Server-Sent Events); bildirim kartı, takip modu, QR kod | `app/events.py` |
+| Yönetici girişi | Panel, arıza listesi, görseller ve durum değişiklikleri yalnızca belediye personeline açık; vatandaş bildirimi ve takibi girişsiz. İmzalı oturum çerezi (HttpOnly, SameSite=Strict), PBKDF2 şifre özeti, giriş deneme sınırı, durum değişikliğinde "kim, ne zaman" kaydı | `app/auth.py` |
+| Vatandaş takibi | Bildirene özel takip kodu (ör. `K7M2-Q9XD`); `/takip` sayfasında Alındı → Ekip yönlendirildi → Onarıldı adımları ve onarım sonrası fotoğrafı. İş emri numarası sıralı olduğu için takipte kullanılmaz (başkasının kaydı tahmin edilemesin) | `app/static/takip.html` |
+| Onarım kanıtı | "Onarıldı" fotoğrafla kaydedilir: fotoğraf maskelenip saklanır, model hasar kalıp kalmadığını kontrol eder, konum kayıttan 50 m'den uzaksa uyarır; panelde önce/sonra yan yana | `app/pipeline.py` |
+| Filtre, istatistik, dışa aktarma | İlçe (OpenStreetMap ilçe sınırları), hasar türü ve durum filtresi; günlük bildirim/onarım grafiği, ortalama ekip yönlendirme ve onarım süresi; filtrelenmiş kayıtları GeoJSON (Netcad, ArcGIS, QGIS) ve CSV (Excel) indirme | `app/repository.py`, `app/export.py` |
 
 ## Model sonuçları
 
-YOLO11s, RDD2022'nin 5 ülkesiyle eğitildi (17.818 eğitim, 2.225 doğrulama görüntüsü). Aşağıdaki değerler modelin **hiç görmediği** 2.232 test görüntüsünde (4.030 hasar) ölçüldü.
+İki model aynı veri bölümleriyle eğitildi (RDD2022'nin 5 ülkesi: 17.818 eğitim, 2.225 doğrulama görüntüsü) ve modellerin **hiç görmediği** aynı 2.232 test görüntüsünde (4.030 hasar) ölçüldü.
 
-| Sınıf | Precision | Recall | AP50 | AP50-95 |
-|---|---|---|---|---|
-| D00 Boyuna çatlak | 0.635 | 0.651 | 0.673 | 0.384 |
-| D10 Enine çatlak | 0.602 | 0.584 | 0.617 | 0.294 |
-| D20 Timsah sırtı | 0.673 | 0.627 | 0.697 | 0.383 |
-| D40 Çukur | 0.578 | 0.450 | 0.498 | 0.201 |
-| **Tümü** | **0.622** | **0.578** | **0.621** | **0.316** |
+- **v1:** YOLO11s, 640 px ([01_model_egitimi_colab.ipynb](notebooks/01_model_egitimi_colab.ipynb))
+- **v2 (uygulamada):** YOLO11m, 800 px; eğitim bölümüne Türkiye'nin 24 şehrinden 598 sağlam yol görüntüsü eklendi (Mapillary, yarı otomatik etiket; Bursa hariç) ([03_model_v2_gece_egitimi.ipynb](notebooks/03_model_v2_gece_egitimi.ipynb), [turkiye_veri_hazirla.py](scripts/turkiye_veri_hazirla.py))
 
-Hız: görüntü başına ~6 ms (4.5 ms çıkarım, NVIDIA L4).
+| AP50 | v1 | v2 |
+|---|---|---|
+| D00 Boyuna çatlak | 0.673 | 0.716 |
+| D10 Enine çatlak | 0.617 | 0.659 |
+| D20 Timsah sırtı | 0.697 | 0.719 |
+| D40 Çukur | 0.498 | 0.555 |
+| **mAP50** | **0.621** | **0.663** |
+| mAP50-95 | 0.316 | 0.338 |
+| Precision / Recall | 0.622 / 0.578 | 0.656 / 0.615 |
+| Çıkarım (NVIDIA L4) | 4.4 ms | 17.8 ms |
+| Fotoğraf başına, dizüstü CPU | ~0.13 sn | ~0.5 sn |
 
-En zayıf sınıf çukur (D40): eğitim verisindeki en az örnekli sınıf ve uzaktan küçük görünüyor. Videoda bir çukur onlarca karede göründüğü için tek kare recall değerinin pratikteki etkisi daha düşüktür. Çukura özel ek veri ve Bursa verisiyle yeniden eğitim yol haritasındadır.
+Uygulama her sınıf için ayrı güven eşiği kullanır: doğrulama setinde F1'i en yüksek yapan değer (`models/esikler.json`; v2: D00 0.26, D10 0.31, D20 0.29, D40 0.36). Görüntü boyutu model dosyasından okunur. v1'e dönmek için:
+
+```bash
+MODEL_PATH=models/best_v1.pt THRESHOLDS_PATH=models/esikler_v1.json uvicorn app.main:app
+```
+
+En zayıf sınıf hâlâ çukur (D40): eğitim verisindeki en az örnekli sınıf ve uzaktan küçük görünüyor. Videoda bir çukur onlarca karede göründüğü için tek kare recall değerinin pratikteki etkisi daha düşüktür.
 
 ### Bursa testi
 
 Mapillary'deki Bursa görüntülerinden 54'ü elle, çokgen çizilerek etiketlendi (17 hasarlı, 37 sağlam, 32 hasar).
 
-| | RDD2022 testi | Bursa testi |
-|---|---|---|
-| mAP50 | 0.621 | 0.302 |
-| Sağlam yolda yanlış alarm (görüntü, eşik 0.35) | | 3 / 37 |
-| Hasarlı yolda hasarı doğru yerde bulma (görüntü) | | 8 / 17 |
+| Bursa testi | v1, eşik 0.35 | v1, sınıf eşikleri | v2, eşik 0.35 | **v2, sınıf eşikleri** |
+|---|---|---|---|---|
+| mAP50 | 0.302 | 0.302 | 0.327 | **0.327** |
+| Precision | 0.238 | 0.238 | 0.590 | **0.590** |
+| Sağlam yolda yanlış alarm (görüntü) | 3 / 37 | 5 / 37 | 0 / 37 | **0 / 37** |
+| Hasarlı yolda hasarı doğru yerde bulma (görüntü) | 8 / 17 | 10 / 17 | 7 / 17 | **9 / 17** |
 
-Başka ülkelerin verisiyle eğitilen model Bursa'da yarı performansa düşüyor (alan farkı). Gözlenen hatalar: şerit çizgisi → boyuna çatlak, rögar kapağı → çukur, parke taşı → timsah sırtı, aşınmış asfalttaki çatlakları kaçırma. Örneklem küçük olduğu için sınıf bazında sonuç verilmemiştir.
+Başka ülkelerin verisiyle eğitilen v1 Bursa'da yarı performansa düşüyordu (alan farkı). Gözlenen hatalar: şerit çizgisi → boyuna çatlak, rögar kapağı → çukur, parke taşı → timsah sırtı, aşınmış asfalttaki çatlakları kaçırma. v2'de sağlam yollardaki yanlış alarmlar kayboldu ve kesinlik 0.24'ten 0.59'a çıktı; kaçırma ise büyük ölçüde sürüyor. Türkiye verisine yalnızca sağlam yol örnekleri girdiği için bu beklenen bir sonuç. Model boyutu ve Türkiye verisi birlikte değiştiği için etkileri ayrıca ölçülmedi. Örneklem küçük olduğu için sınıf bazında sonuç verilmemiştir.
 
 ## Öncelik formülü
 
@@ -99,11 +115,13 @@ Notebook sunum için gereken grafikleri de üretir: sınıf dağılımı, eğiti
 `models/best.pt` dosyası yerindeyken:
 
 ```bash
-cp .env.example .env
+cp .env.example .env      # ADMIN_PASSWORD ve SECRET_KEY değerlerini doldurun
 docker compose up --build
 ```
 
-Arayüz: http://localhost:8000 · API dokümantasyonu: http://localhost:8000/docs
+Arayüz: http://localhost:8000 (personel girişi: kullanıcı `yonetici`, şifre `.env` içindeki `ADMIN_PASSWORD`) · Vatandaş: http://localhost:8000/bildir, http://localhost:8000/takip · API dokümantasyonu: http://localhost:8000/docs
+
+`ADMIN_PASSWORD` boş bırakılırsa giriş kapalıdır ve panel herkese açılır: bu yalnızca yerel geliştirme içindir, uygulama açılışta uyarı yazar. Yayın kurulumunda (`deploy/`) şifre zorunludur.
 
 - İlk derleme ~3,5 dakika sürer; imaj ~2,6 GB'tır (CPU sürümü PyTorch). Sonraki açılışlar birkaç saniyedir.
 - KVKK maskeleme modelleri (yüz, kişi/araç) imaja gömülüdür; çalışırken internet gerekmez. Yalnızca harita karoları internetten gelir.
@@ -130,17 +148,24 @@ pytest
 
 | Uç nokta | Açıklama |
 |---|---|
-| `POST /api/analyze-road` | `image` (dosya), `lat`, `lon` (boşsa EXIF GPS), `source` (`vatandas` \| `saha_araci`) |
+| **Herkese açık** | |
+| `POST /api/analyze-road` | `image` (dosya), `lat`, `lon` (boşsa EXIF GPS), `source` (`vatandas`; `saha_ekibi` ve `saha_araci` giriş ister). Yanıtta bildirene özel `takip_kodu` |
 | | Yanıtta analiz raporu: karar ve gerekçesi (`degerlendirme`), eşik altı zayıf adaylar, konum bağlamı (yol sınıfı, yakın okul/hastane, veri kapsamı), görüntü kalitesi (yön, ışık), analiz süresi ve işaretlenmiş önizleme. Dikey fotoğraflarda yol bölgesi ayrıca yüksek çözünürlükte taranır. |
-| `GET /api/issues?durum=acik&min_oncelik=45` | Arızalar, GeoJSON `FeatureCollection` (EPSG:4326), önceliğe göre sıralı |
-| `GET /api/issues/{id}` | Arıza ve tüm bildirimleri |
-| `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit"}`: saha geri bildirimi |
-| `GET /api/stats` | Durum ve seviye özetleri |
-| `GET /health` | Model, KVKK dedektörleri, bağlam verisi durumu |
-| `GET /etiket` | Yerel etiket düzeltme aracı (test seti hazırlamak için) |
-| `GET /bildir` | Mobil bildirim sayfası (telefon kamerası + GPS) |
+| `GET /api/takip/{kod}` | Vatandaş takibi: durum adımları, onarım fotoğrafı bağlantısı (IP başına dakikada 30 sorgu) |
+| `GET /bildir`, `GET /takip` | Mobil bildirim sayfası (telefon kamerası + GPS), takip sayfası |
+| `GET /health` | Model, KVKK dedektörleri, bağlam verisi, giriş durumu |
+| `POST /api/giris`, `POST /api/cikis`, `GET /api/oturum` | Personel oturumu (`{"kullanici", "sifre"}`) |
+| **Personele özel (giriş gerekli)** | |
+| `GET /api/issues?durum=acik,ekip_yonlendirildi&sinif=D40&ilce=Nilüfer&min_oncelik=45` | Arızalar, GeoJSON `FeatureCollection` (EPSG:4326), önceliğe göre sıralı |
+| `GET /api/issues/{id}` | Arıza, tüm bildirimleri ve durum geçmişi (kim, ne zaman) |
+| `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit" \| "acik", "aciklama": "..."}` |
+| `POST /api/issues/{id}/onarim` | Onarım fotoğrafı (`image`, isteğe bağlı `lat`, `lon`): kaydı kapatır, hasar kalıp kalmadığını kontrol eder |
+| `GET /api/istatistik?gun=30&ilce=...&sinif=...` | Günlük bildirim/onarım, durum, sınıf ve ilçe dağılımı, ortalama ekip yönlendirme ve onarım süresi |
+| `GET /api/disa-aktar?bicim=geojson\|csv&...` | Filtrelenmiş kayıtları indir (CSV: Türkçe Excel için noktalı virgül ve UTF-8 BOM) |
+| `GET /api/stats`, `GET /api/ilceler` | Üst çubuk özetleri, ilçe listesi |
 | `GET /api/olaylar` | Gerçek zamanlı olay akışı (SSE): `bildirim`, `durum` |
-| `GET /api/qr?metin=...` | QR kod (SVG) |
+| `GET /media/{dosya}` | Maskelenmiş tespit ve onarım görselleri |
+| `GET /etiket` | Yerel etiket düzeltme aracı (yayında kapalı) |
 
 GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir.
 
@@ -151,6 +176,7 @@ GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir
 | RDD2022 (Çekya, Hindistan, Japonya, ABD, Çin) | [figshare](https://figshare.com/articles/dataset/21431547), Arya ve ark. 2022 | CC BY 4.0 | Eğitim / doğrulama / test |
 | Bursa sokak görüntüleri | [Mapillary](https://www.mapillary.com), `scripts/fetch_mapillary_bursa.py` | CC BY-SA 4.0 | Bursa test seti (alan farkı ölçümü) |
 | Bursa yol ağı, okul, hastane | OpenStreetMap, `scripts/fetch_osm_context.py` | ODbL | Konum katsayısı |
+| Bursa ilçe sınırları (17 ilçe) | OpenStreetMap, `scripts/fetch_osm_districts.py` | ODbL | İlçe filtresi ve istatistik |
 
 **RDD2022'de Türkiye verisi yoktur.** Bu nedenle model ayrıca Bursa görüntülerinden oluşan bir test setinde ölçülür (notebook bölüm 6).
 
@@ -167,7 +193,8 @@ python scripts/fetch_mapillary_bursa.py --candidates --since "" --out data/bursa
 3. Ölçün:
 
 ```bash
-python scripts/evaluate_bursa.py
+python scripts/evaluate_bursa.py                                                         # uygulamadaki model (v2)
+python scripts/evaluate_bursa.py --model models/best_v1.pt --thresholds models/esikler_v1.json  # v1 ile kıyas
 ```
 
 Çıktı, RDD2022 test sonucuyla kıyaslamanın yanında iki görüntü düzeyi metrik verir: sağlam yolda yanlış alarm oranı ve hasarlı yolda yakalama oranı.

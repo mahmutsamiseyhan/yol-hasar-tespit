@@ -27,7 +27,8 @@ sys.path.insert(0, str(ROOT))
 
 from app.labeling import CLASSES, bounding_box, format_shape, read_shapes  # noqa: E402
 
-RDD_REFERENCE = {"precision": 0.622, "recall": 0.578, "mAP50": 0.621, "mAP50-95": 0.316}
+# Uygulamadaki modelin (v2: YOLO11m, 800 px) RDD2022 test sonucu; v1 için bkz. models/kiyas_v1_v2.json
+RDD_REFERENCE = {"precision": 0.656, "recall": 0.615, "mAP50": 0.663, "mAP50-95": 0.338}
 
 
 def collect_reviewed(label_dir: Path) -> tuple[list[dict], dict]:
@@ -96,6 +97,7 @@ def main():
     ap.add_argument("--model", type=Path, default=ROOT / "models" / "best.pt")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "bursa_test" / "degerlendirme")
     ap.add_argument("--conf", type=float, default=0.35, help="Uygulamadaki genel güven eşiği")
+    ap.add_argument("--imgsz", type=int, help="Varsayılan: modelin eğitildiği boyut (v1: 640, v2: 800)")
     ap.add_argument("--thresholds", type=Path, default=ROOT / "models" / "esikler.json",
                     help="Sınıf bazlı eşik dosyası (yoksa tüm sınıflar için --conf kullanılır)")
     args = ap.parse_args()
@@ -110,11 +112,12 @@ def main():
     from ultralytics import YOLO
 
     model = YOLO(str(args.model))
+    args.imgsz = args.imgsz or int(model.overrides.get("imgsz") or 640)
     yaml = build_yolo_dataset(reviewed, args.out / "veri")
 
     detection = None
     if n_boxes:
-        m = model.val(data=str(yaml), split="test", imgsz=640, batch=8, plots=True, verbose=False,
+        m = model.val(data=str(yaml), split="test", imgsz=args.imgsz, batch=8, plots=True, verbose=False,
                       project=str(args.out.resolve()), name="metrikler", exist_ok=True)
         per_class = {}
         for i, cls_id in enumerate(m.box.ap_class_index):
@@ -131,7 +134,7 @@ def main():
     from app.detector import YoloDetector
 
     thresholds = load_class_thresholds(args.thresholds) if args.thresholds and args.thresholds.exists() else {}
-    detector = YoloDetector(args.model, conf=min([args.conf, *thresholds.values()]))
+    detector = YoloDetector(args.model, conf=min([args.conf, *thresholds.values()]), imgsz=args.imgsz)
     predictions = {}
     for r in reviewed:
         img = cv2.imread(str(r["image"]))
@@ -143,7 +146,8 @@ def main():
 
     result = {"goruntu_sayisi": len(reviewed), "hasar_kutusu": n_boxes, "dislanan": skipped,
               "tespit_metrikleri": detection, "rdd2022_referans": RDD_REFERENCE,
-              "goruntu_duzeyi": {**images, "guven_esigi": args.conf, "sinif_esikleri": thresholds or None}}
+              "goruntu_duzeyi": {**images, "guven_esigi": args.conf, "sinif_esikleri": thresholds or None},
+              "model": args.model.name, "imgsz": args.imgsz}
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "bursa_metrikleri.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
 

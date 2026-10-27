@@ -52,6 +52,13 @@
   .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 8px; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   footer { text-align: center; font-size: 12px; color: var(--muted); padding: 0 16px 20px; }
+  footer a { color: var(--brand); }
+  .code-box { margin-top: 12px; padding: 12px; border-radius: 10px; background: #eef4fb; text-align: center; }
+  .code-box .code { font-size: 26px; font-weight: 700; letter-spacing: 3px; color: var(--brand); font-variant-numeric: tabular-nums; }
+  .code-box .hint { font-size: 13px; color: var(--muted); }
+  .code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .code-actions a, .code-actions button { display: block; text-align: center; padding: 10px; border-radius: 8px; font: inherit; font-size: 15px; font-weight: 600; text-decoration: none; border: 0; cursor: pointer; }
+  .code-actions a { background: var(--brand); color: #fff; } .code-actions button { background: #fff; color: var(--brand); border: 1px solid #c9d8ea; }
 </style>
 </head>
 <body>
@@ -78,7 +85,7 @@
       <img id="preview" hidden alt="Seçilen fotoğraf">
     </div>
 
-    <div class="card">
+    <div class="card" id="sourceCard" hidden>
       <div class="step"><span class="num" id="n3">3</span>Bildiren</div>
       <div class="seg">
         <label><input type="radio" name="source" value="vatandas" checked><span>Vatandaş</span></label>
@@ -97,7 +104,7 @@
 
   <div id="result" hidden></div>
 </main>
-<footer>Bildiriminiz anında belediyenin iş takip ekranına düşer.</footer>
+<footer>Bildiriminiz anında belediyenin iş takip ekranına düşer. · <a href="/takip">Bildirimimi takip et</a></footer>
 
 <script src="/static/vendor/leaflet.js"></script>
 <script>
@@ -230,7 +237,11 @@ function showResult(d) {
     head = `<div class="status ok">Bildiriminiz alındı.</div>
       <div class="big">${esc(p.hasar_adi)}</div>
       <span class="badge lvl-${p.oncelik_seviyesi}">${p.oncelik_puani} · ${LEVEL_TR[p.oncelik_seviyesi]}</span>
-      <p style="margin:10px 0 0">İş emri no: <b>${esc(p.is_emri_no)}</b>${d.mevcut_kayitla_birlestirildi ? `<br>Bu nokta daha önce bildirilmiş; kaydın önceliği güncellendi (${p.bildirim_sayisi}. bildirim).` : ""}</p>`;
+      <p style="margin:10px 0 0">İş emri no: <b>${esc(p.is_emri_no)}</b>${d.mevcut_kayitla_birlestirildi ? `<br>Bu nokta daha önce bildirilmiş; kaydın önceliği güncellendi (${p.bildirim_sayisi}. bildirim).` : ""}</p>
+      ${d.takip_kodu ? `<div class="code-box"><div class="hint">Takip kodunuz</div><div class="code">${esc(d.takip_kodu)}</div>
+        <div class="hint">Bu kodla bildiriminizin durumunu (ekip yönlendirildi, onarıldı) takip edebilirsiniz. Kod bu cihazda da saklandı.</div>
+        <div class="code-actions"><a href="${esc(d.takip_url)}">Takip et</a><button type="button" id="copyCode">Kodu kopyala</button></div></div>` : ""}`;
+    saveCode(d.takip_kodu);
   } else {
     head = `<div class="status ok">Bildiriminiz alındı.</div><div class="big">Hasar tespit edilmedi</div>
       <p style="margin:6px 0 0;font-size:14px;color:#5f6b7a">Fotoğrafta belirgin bir yol hasarı bulunamadı. Hasar varsa daha yakından tekrar çekmeyi deneyin.</p>`;
@@ -240,6 +251,10 @@ function showResult(d) {
       ${notes ? `<ul class="notes">${notes}</ul>` : ""}
       <button class="btn primary" id="again" style="margin-top:12px">Yeni bildirim</button></div>`;
   $("form").hidden = true; $("result").hidden = false;
+  if ($("copyCode")) $("copyCode").onclick = async () => {
+    try { await navigator.clipboard.writeText(d.takip_kodu); $("copyCode").textContent = "Kopyalandı"; }
+    catch (_) { $("copyCode").textContent = d.takip_kodu; }
+  };
   window.scrollTo({ top: 0, behavior: "smooth" });
   $("again").onclick = () => {
     state.blob = null; $("preview").hidden = true; $("camera").value = ""; $("gallery").value = "";
@@ -247,6 +262,18 @@ function showResult(d) {
     $("result").hidden = true; $("form").hidden = false; refresh();
   };
 }
+
+function saveCode(code) {
+  if (!code) return;
+  try {
+    const list = JSON.parse(localStorage.getItem("yh_takip") || "[]").filter((c) => c.kod !== code);
+    list.unshift({ kod: code, tarih: new Date().toISOString() });
+    localStorage.setItem("yh_takip", JSON.stringify(list.slice(0, 10)));
+  } catch (_) { /* gizli sekme: kod ekranda gösterildi, saklanamadı */ }
+}
+
+// "Belediye saha ekibi" seçeneği yalnızca giriş yapmış personele gösterilir
+fetch("/api/oturum").then((r) => r.json()).then((s) => { $("sourceCard").hidden = !s.kullanici; }).catch(() => {});
 
 refresh();
 startLocation();

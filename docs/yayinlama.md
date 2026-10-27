@@ -56,12 +56,17 @@ Sunucu IP'sini ve seçtiğiniz adresi verdiğinizde:
 2. Kurulum betiğini çalıştırırım: `DOMAIN=... bash deploy/sunucu_kurulum.sh`
    - Docker'ı kurar, güvenlik duvarında yalnızca SSH/HTTP/HTTPS'i açar, gerekirse takas alanı ekler
    - Kodu GitHub'dan çeker, uygulamayı ve HTTPS'i başlatır, sağlık kontrolü yapar
-3. Telefonla `https://ADRES/bildir` adresini deneriz.
+   - İlk kurulumda yönetici şifresi ve oturum anahtarı üretir, sunucudaki `deploy/.env` dosyasına yazar (yalnızca root okuyabilir). Şifre olmadan uygulama başlamaz.
+3. Telefonla `https://ADRES/bildir` adresini deneriz; panel `https://ADRES` adresinde, kullanıcı `yonetici`.
+   Şifreyi sunucuda görmek için: `sudo grep ADMIN_PASSWORD /opt/yol-hasar-tespit/deploy/.env`. Değiştirmek için o satırı düzenleyip betiği tekrar çalıştırın.
 
 Güncelleme: kod değişince aynı betiği tekrar çalıştırmak yeterli.
 
 ## Güvenlik ve KVKK notları
-- Uygulamada kullanıcı girişi yok: adresi bilen herkes bildirim gönderebilir ve kayıt durumunu değiştirebilir. Kötüye kullanımı sınırlamak için IP başına dakikada 20 fotoğraf / 60 durum değişikliği sınırı vardır. Etiket aracı yayında kapalıdır.
+- İş takip paneli, arıza listesi, görseller ve durum değişiklikleri **yönetici girişi** ister. Herkese açık olanlar yalnızca bildirim sayfası (`/bildir`) ve bildirene özel takip kodu ile takip sayfası (`/takip`).
+- Oturum imzalı bir çerezle tutulur (HttpOnly, Secure, SameSite=Strict). Giriş denemesi IP başına dakikada 10 ile sınırlıdır; başarısız denemeler kayda geçer. Durum değişikliklerinde işlemi yapan kullanıcı ve zaman saklanır.
+- Kötüye kullanımı sınırlamak için IP başına dakikada 20 fotoğraf / 60 durum değişikliği / 30 takip sorgusu sınırı vardır. Etiket aracı yayında kapalıdır.
+- Birden çok personel hesabı için `deploy/.env` içine `ADMIN_USERS='ali:sifre1,veli:sifre2'` eklenebilir. Şifre yerine özet de yazılabilir: `python -m app.auth`.
 - Fotoğraflardaki yüzler ve plakalar kaydedilmeden önce bulanıklaştırılır; ham görüntü saklanmaz. Veri Türkiye'deki sunucudadır.
-- Bu bir demo kurulumudur; gerçek vatandaş verisi için belediyenin kendi altyapısı, kullanıcı girişi ve KVKK aydınlatma metni gerekir.
+- Bu bir demo kurulumudur; gerçek vatandaş verisi için belediyenin kendi altyapısı, kurumsal kimlik doğrulama (ör. e-Devlet / belediye dizini) ve KVKK aydınlatma metni gerekir.
 - İş bitince sunucuyu panelden kapatın / silin.

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b5394">
+<title>Personel Girişi · Bursa Yol Hasarı</title>
+<style>
+  :root { --bg: #f4f6f9; --ink: #1c2430; --muted: #5f6b7a; --line: #dfe4ea; --brand: #0b5394; --err: #a12622; }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg);
+         display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+  .box { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(15,23,35,.08); width: min(380px, 100%); overflow: hidden; }
+  .head { background: var(--brand); color: #fff; padding: 18px 22px; }
+  .head h1 { margin: 0; font-size: 18px; }
+  .head p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
+  form { padding: 20px 22px 22px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input { width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+  input:focus { outline: 2px solid #9ec5f4; border-color: var(--brand); }
+  button { width: 100%; margin-top: 18px; padding: 11px; border: 0; border-radius: 8px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .err { background: #fdecea; color: var(--err); border-radius: 8px; padding: 9px 11px; font-size: 14px; margin-top: 14px; }
+  .foot { font-size: 13px; color: var(--muted); padding: 0 22px 20px; }
+  .foot a { color: var(--brand); }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="head">
+    <h1>Belediye personeli girişi</h1>
+    <p>Bursa Yol Hasarı Karar Destek Sistemi</p>
+  </div>
+  <form id="form">
+    <label for="user">Kullanıcı adı</label>
+    <input id="user" autocomplete="username" required autofocus>
+    <label for="pass">Şifre</label>
+    <input id="pass" type="password" autocomplete="current-password" required>
+    <div class="err" id="err" role="alert" hidden></div>
+    <button id="submit" type="submit">Giriş yap</button>
+  </form>
+  <div class="foot">Yol hasarı bildirmek için giriş gerekmez: <a href="/bildir">Hasar bildir</a> · <a href="/takip">Bildirimimi takip et</a></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+// Yalnızca bu sitedeki bir sayfaya geri dön (açık yönlendirme olmasın)
+const next = new URLSearchParams(location.search).get("sonra");
+const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("submit").disabled = true; $("err").hidden = true;
+  try {
+    const res = await fetch("/api/giris", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kullanici: $("user").value, sifre: $("pass").value }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Giriş yapılamadı.");
+    location.replace(target);
+  } catch (err) {
+    $("err").textContent = err.message; $("err").hidden = false;
+    $("pass").value = ""; $("pass").focus();
+  } finally {
+    $("submit").disabled = false;
+  }
+});
+</script>
+</body>
+</html>

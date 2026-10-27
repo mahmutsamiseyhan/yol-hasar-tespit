@@ -4,10 +4,30 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .auth import parse_users
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+
+def load_env_file(path: Path = ROOT_DIR / ".env") -> None:
+    """Yerel çalıştırmada .env dosyasını okur. Ortamda zaten tanımlı değişkenler ezilmez (Docker önceliklidir)."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if not sep or key.startswith("#"):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        os.environ.setdefault(key.strip(), value)
+
+
+load_env_file()
 
 
 def _env_float(name: str, default: float) -> float:
@@ -73,10 +93,14 @@ class Settings:
     # Bu değer ile güven eşiği arasındaki tespitler kayıt açmaz, analiz raporunda "zayıf aday" olarak gösterilir
     candidate_conf: float = field(default_factory=lambda: _env_float("CANDIDATE_CONF", 0.10))
     iou_threshold: float = field(default_factory=lambda: _env_float("IOU_THRESHOLD", 0.5))
-    imgsz: int = field(default_factory=lambda: int(os.getenv("IMGSZ", 640)))
+    # Boş bırakılırsa modelin eğitildiği boyut kullanılır (v1: 640, v2: 800)
+    imgsz: int | None = field(default_factory=lambda: int(v) if (v := os.getenv("IMGSZ")) else None)
 
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("DATA_DIR", ROOT_DIR / "data")))
     db_path: Path = field(default_factory=lambda: Path(os.getenv("DB_PATH", ROOT_DIR / "data" / "yol_hasar.db")))
+    districts_path: Path = field(
+        default_factory=lambda: Path(os.getenv("DISTRICTS_PATH", ROOT_DIR / "data" / "bursa_ilceler.geojson"))
+    )
     context_path: Path = field(
         default_factory=lambda: Path(os.getenv("CONTEXT_PATH", ROOT_DIR / "data" / "bursa_context.geojson"))
     )
@@ -84,6 +108,13 @@ class Settings:
     upload_limit_per_min: int = field(default_factory=lambda: int(os.getenv("UPLOAD_LIMIT_PER_MIN", 20)))
     write_limit_per_min: int = field(default_factory=lambda: int(os.getenv("WRITE_LIMIT_PER_MIN", 60)))
     enable_labeling: bool = field(default_factory=lambda: os.getenv("ENABLE_LABELING", "1") not in ("0", "false", "no"))
+    # Yönetici girişi: panel ve durum değişiklikleri. Kullanıcı tanımlı değilse giriş kapalıdır (yalnızca yerel geliştirme)
+    admin_users: dict = field(default_factory=lambda: parse_users(
+        os.getenv("ADMIN_USERS"), os.getenv("ADMIN_USER", "yonetici"), os.getenv("ADMIN_PASSWORD")))
+    # Oturum çerezini imzalayan anahtar; verilmezse her başlatmada yeniden üretilir (oturumlar kapanır)
+    secret_key: bytes = field(default_factory=lambda: (os.getenv("SECRET_KEY") or "").encode() or secrets.token_bytes(32))
+    session_hours: float = field(default_factory=lambda: _env_float("SESSION_HOURS", 12))
+    login_limit_per_min: int = field(default_factory=lambda: int(os.getenv("LOGIN_LIMIT_PER_MIN", 10)))
     # Telefonların erişeceği genel HTTPS adresi (ör. tünel adresi); paneldeki QR kod bunu gösterir
     public_url: str | None = field(default_factory=lambda: (os.getenv("PUBLIC_URL") or "").rstrip("/") or None)
     # Etiket düzeltme aracının çalıştığı klasör (görüntü + YOLO etiketleri)

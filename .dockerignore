@@ -9,3 +9,4 @@ tests
 docs
 data/*
 !data/bursa_context.geojson
+!data/bursa_ilceler.geojson

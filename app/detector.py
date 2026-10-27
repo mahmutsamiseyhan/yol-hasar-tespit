@@ -67,7 +67,7 @@ class YoloDetector:
     ROAD_REGION_TOP = 0.5  # yol bölgesi: karenin alt yarısı
     ROAD_REGION_IMGSZ = 960
 
-    def __init__(self, model_path: Path, conf: float = 0.35, iou: float = 0.5, imgsz: int = 640,
+    def __init__(self, model_path: Path, conf: float = 0.35, iou: float = 0.5, imgsz: int | None = 640,
                  road_focus: bool = True):
         self.model_path = Path(model_path)
         self.conf = conf
@@ -96,6 +96,12 @@ class YoloDetector:
             self._model = YOLO(str(self.model_path))
         return self._model
 
+    def input_size(self) -> int:
+        """imgsz verilmemişse modelin eğitildiği görüntü boyutu (ağırlık dosyasında kayıtlı)."""
+        if self.imgsz is None:
+            self.imgsz = int(self._load().overrides.get("imgsz") or 640)
+        return self.imgsz
+
     def _predict(self, image_bgr: np.ndarray, imgsz: int, y_offset: int = 0) -> list[Detection]:
         result = self._load().predict(image_bgr, conf=self.conf, iou=self.iou, imgsz=imgsz, verbose=False)[0]
         names = result.names
@@ -108,7 +114,7 @@ class YoloDetector:
         return detections
 
     def detect(self, image_bgr: np.ndarray) -> list[Detection]:
-        detections = self._predict(image_bgr, self.imgsz)
+        detections = self._predict(image_bgr, self.input_size())
         if self.uses_road_focus(image_bgr):
             top = int(image_bgr.shape[0] * self.ROAD_REGION_TOP)
             detections = merge_detections(

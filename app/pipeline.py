@@ -17,7 +17,7 @@ import numpy as np
 from .config import CLASS_LABELS_TR, Settings
 from .context import RoadContext
 from .detector import Detection, Detector
-from .geo import exif_gps, feature
+from .geo import exif_gps, feature, haversine_m
 from .privacy import PrivacyMasker
 from .repository import Repository
 from .severity import image_severity, priority_score
@@ -28,6 +28,8 @@ SOURCES = ("vatandas", "saha_ekibi", "saha_araci")
 MAX_CANDIDATES = 5
 LOW_LIGHT = 70  # ortalama parlaklık (0-255) bunun altındaysa ışık yetersiz sayılır
 PREVIEW_MAX_SIDE = 1280
+# Onarım fotoğrafı arıza konumundan bu kadar uzaktaysa uyarı verilir (telefon GPS hatası payı dahil)
+REPAIR_MAX_DISTANCE_M = 50
 ROAD_TR = {"motorway": "Otoyol", "trunk": "Devlet yolu", "primary": "Ana arter", "secondary": "Tali arter",
            "tertiary": "Toplayıcı yol", "local": "Ara sokak / ana yol ağı dışı"}
 CLASS_COLORS = {"D40": (0, 0, 230), "D20": (0, 120, 255), "D10": (0, 200, 255), "D00": (0, 220, 180)}
@@ -117,7 +119,7 @@ class RoadDamagePipeline:
 
         dominant: Detection = sev["dominant"]["detection"]
         issue, merged = self._upsert_issue(lat, lon, dominant.cls, sev["severity"], image_name)
-        report_id = self.repo.add_report(
+        saved = self.repo.add_report(
             issue_id=issue["id"], lat=lat, lon=lon, source=source, severity=sev["severity"],
             detections=[d.to_dict() for d in detections], privacy=mask_report.to_dict(), image_path=image_name,
         )
@@ -126,7 +128,10 @@ class RoadDamagePipeline:
         return {
             **base,
             "hasar_tespit_edildi": True,
-            "bildirim_id": report_id,
+            "bildirim_id": saved["id"],
+            # Bildirene özel, tahmin edilemeyen kod: iş emri numarası sıralı olduğu için takipte kullanılmaz
+            "takip_kodu": saved["tracking_code"],
+            "takip_url": f"/takip?kod={saved['tracking_code']}",
             "mevcut_kayitla_birlestirildi": merged,
             "goruntu_url": f"/media/{image_name}",
             "ariza": issue_to_feature(issue),
@@ -153,6 +158,7 @@ class RoadDamagePipeline:
                     damage_class=damage_class if stronger else existing["damage_class"],
                     image_path=image_name if stronger else existing["image_path"],
                     priority=prio["score"], level=prio["level"], context={**ctx, "skor": prio["breakdown"]},
+                    district=ctx.get("ilce"),
                 )
                 merged = True
             else:
@@ -161,9 +167,55 @@ class RoadDamagePipeline:
                 issue = self.repo.create_issue(
                     lat=lat, lon=lon, damage_class=damage_class, severity=severity, priority=prio["score"],
                     level=prio["level"], context={**ctx, "skor": prio["breakdown"]}, image_path=image_name,
+                    district=ctx.get("ilce"),
                 )
                 merged = False
         return issue, merged
+
+    def record_repair(self, issue_id: int, image_bytes: bytes, actor: str | None, lat: float | None = None,
+                      lon: float | None = None) -> dict:
+        """Saha ekibinin onarım fotoğrafı: maskelenip saklanır, model hasar kalıp kalmadığını kontrol eder.
+
+        Karar mühendiste kalır: model hâlâ hasar görse de kayıt kapatılır, ama panelde uyarı gösterilir.
+        """
+        issue = self.repo.get_issue(issue_id)
+        image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            raise AnalysisError("Görüntü okunamadı. JPEG veya PNG yükleyin.")
+        remaining = [d for d in self.detector.detect(image) if d.confidence >= self.settings.threshold_for(d.cls)]
+        masked, mask_report = self.masker.mask(image)
+        annotated = _annotate(masked, [{"detection": d} for d in remaining])
+        image_name = f"{uuid.uuid4().hex}.jpg"
+        cv2.imwrite(str(self.settings.media_dir / image_name), annotated, [cv2.IMWRITE_JPEG_QUALITY, 88])
+
+        distance = round(haversine_m(lat, lon, issue["lat"], issue["lon"])) if lat is not None and lon is not None else None
+        notes = []
+        if remaining:
+            top = max(remaining, key=lambda d: d.confidence)
+            notes.append(f"Onarım fotoğrafında model hâlâ {CLASS_LABELS_TR.get(top.cls, top.cls)} görüyor "
+                         f"(%{round(100 * top.confidence)} güven). Yerinde kontrol önerilir.")
+        else:
+            notes.append("Onarım fotoğrafında model hasar görmedi.")
+        if distance is not None and distance > REPAIR_MAX_DISTANCE_M:
+            notes.append(f"Fotoğraf konumu arıza kaydından {distance} m uzakta. Doğru noktanın fotoğraflandığını "
+                         "kontrol edin.")
+        check = {"sonuc": "hasar_suphesi" if remaining else "temiz",
+                 "kalan_hasar": [_candidate_out(d) for d in remaining], "mesafe_m": distance,
+                 "maskelenen_bolge": mask_report.to_dict()["maskelenen_bolge"], "notlar": notes}
+        issue = self.repo.set_status(issue_id, "onarildi", actor, note=" ".join(notes),
+                                     repair_image=image_name, repair_check=check)
+        return {"ariza": issue_to_feature(issue), "kontrol": check, "onizleme": _data_uri(annotated)}
+
+    def fill_missing_districts(self) -> int:
+        """İlçe sınırları sonradan eklendiyse eski kayıtların ilçesini doldurur."""
+        districts = self.context.districts
+        n = 0
+        for row in self.repo.issues_without_district() if districts else []:
+            name = districts.lookup(row["lat"], row["lon"])
+            if name:
+                self.repo.update_issue(row["id"], district=name)
+                n += 1
+        return n
 
     def purge_expired_media(self) -> int:
         paths = self.repo.expired_media(self.settings.retention_days)
@@ -192,8 +244,14 @@ def issue_to_feature(issue: dict) -> dict:
             "yakin_kritik_tesisler": ctx.get("yakin_kritik_tesisler", []),
             "skor_detayi": ctx.get("skor"),
             "goruntu_url": f"/media/{issue['image_path']}" if issue.get("image_path") else None,
+            "ilce": issue.get("district"),
             "olusturma": issue["created_at"],
             "guncelleme": issue["updated_at"],
+            "onarim": {
+                "tarih": issue.get("repaired_at"),
+                "goruntu_url": f"/media/{issue['repair_image']}" if issue.get("repair_image") else None,
+                "kontrol": issue.get("repair_check"),
+            } if issue["status"] == "onarildi" else None,
         },
     )
 

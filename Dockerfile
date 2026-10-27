@@ -15,7 +15,7 @@ RUN pip install -r requirements.txt
 
 COPY app ./app
 COPY scripts ./scripts
-COPY data/bursa_context.geojson ./data/bursa_context.geojson
+COPY data/bursa_context.geojson data/bursa_ilceler.geojson ./data/
 # KVKK maskeleme modelleri imaja gömülür: demo ortamında internet gerekmez
 RUN python scripts/download_models.py
 

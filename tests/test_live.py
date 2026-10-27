@@ -61,7 +61,7 @@ def test_report_and_status_change_are_published(make_pipeline):
     assert ev["tip"] == "bildirim" and ev["kaynak"] == "saha_ekibi" and ev["hasar"] is True
     assert ev["is_emri_no"] == body["ariza"]["properties"]["is_emri_no"] and ev["seviye"] == "kritik"
     assert published[1] == {"tip": "durum", "id": issue_id, "durum": "ekip_yonlendirildi",
-                            "is_emri_no": ev["is_emri_no"]}
+                            "is_emri_no": ev["is_emri_no"], "kullanici": "yonetici"}
 
 
 def test_report_event_without_damage():
