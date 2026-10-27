@@ -14,6 +14,7 @@ services:
       # Panel girişi zorunlu: şifre tanımlı değilse uygulama hiç başlamaz (sunucu_kurulum.sh üretir)
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD tanımlı değil}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY tanımlı değil}
+      TEAMS: ${TEAMS:-Ekip 1,Ekip 2,Ekip 3}   # "Ekip yönlendir" listesi; deploy/.env içinde değiştirilebilir
       ENABLE_LABELING: "0"           # etiket aracı internete açılmaz
       UPLOAD_LIMIT_PER_MIN: "20"
       OMP_NUM_THREADS: "2"           # küçük sunucuda CPU'yu boğmasın

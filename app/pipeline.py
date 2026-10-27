@@ -54,6 +54,7 @@ class RoadDamagePipeline:
         self.context = context
         self.repo = repo
         settings.media_dir.mkdir(parents=True, exist_ok=True)
+        settings.training_dir.mkdir(parents=True, exist_ok=True)
 
     def analyze(self, image_bytes: bytes, lat: float | None = None, lon: float | None = None,
                 source: str = "vatandas", accuracy_m: float | None = None) -> dict:
@@ -117,11 +118,16 @@ class RoadDamagePipeline:
         cv2.imwrite(str(self.settings.media_dir / image_name), _annotate(masked, sev["items"]),
                     [cv2.IMWRITE_JPEG_QUALITY, 88])
 
+        # Eğitim kopyası: maskelenmiş ama kutu çizilmemiş (yönetici düzeltirse eğitim örneği olur)
+        clean_name = f"{uuid.uuid4().hex}.jpg"
+        cv2.imwrite(str(self.settings.training_dir / clean_name), masked, [cv2.IMWRITE_JPEG_QUALITY, 90])
+
         dominant: Detection = sev["dominant"]["detection"]
         issue, merged = self._upsert_issue(lat, lon, dominant.cls, sev["severity"], image_name)
         saved = self.repo.add_report(
             issue_id=issue["id"], lat=lat, lon=lon, source=source, severity=sev["severity"],
             detections=[d.to_dict() for d in detections], privacy=mask_report.to_dict(), image_path=image_name,
+            clean_image=clean_name, image_w=w, image_h=h,
         )
 
         report["sure_ms"] = round(1000 * (time.perf_counter() - started))
@@ -204,7 +210,63 @@ class RoadDamagePipeline:
                  "maskelenen_bolge": mask_report.to_dict()["maskelenen_bolge"], "notlar": notes}
         issue = self.repo.set_status(issue_id, "onarildi", actor, note=" ".join(notes),
                                      repair_image=image_name, repair_check=check)
+        self._feedback_for_status(issue_id, "onarildi", actor)
         return {"ariza": issue_to_feature(issue), "kontrol": check, "onizleme": _data_uri(annotated)}
+
+    def correct_class(self, issue_id: int, new_class: str, actor: str | None) -> dict:
+        """Yöneticinin hasar türü düzeltmesi: şiddet sınıf ağırlığı oranında güncellenir, öncelik yeniden hesaplanır."""
+        issue = self.repo.get_issue(issue_id)
+        old_class = issue["damage_class"]
+        if new_class == old_class:
+            return issue
+        weights = self.settings.class_weights
+        severity = min(1.0, issue["severity"] * weights.get(new_class, 1.0) / max(weights.get(old_class, 1.0), 1e-6))
+        ctx = issue.get("context", {})
+        prio = priority_score(severity, ctx.get("konum_katsayisi", 0.55), issue["report_count"])
+        self.repo.update_issue(issue_id, damage_class=new_class, severity=round(severity, 4), priority=prio["score"],
+                               level=prio["level"], context={**ctx, "skor": prio["breakdown"]})
+        self.repo.log_event(issue_id, "sinif", actor,
+                            f"Hasar türü düzeltildi: {CLASS_LABELS_TR.get(old_class, old_class)} → "
+                            f"{CLASS_LABELS_TR.get(new_class, new_class)} (öncelik {issue['priority']} → {prio['score']})")
+        # Eğitim örneği: modelin bu türdeki kutuları düzeltilmiş türle etiketlenir
+        for r in self.repo.reports_for_training(issue_id):
+            labels = [{"sinif": new_class if d["cls"] == old_class else d["cls"], "kutu": d["box"]} for d in r["detections"]]
+            self.repo.upsert_sample(report_id=r["id"], issue_id=issue_id, kind="sinif_duzeltme", labels=labels,
+                                    meta={"eski": old_class, "yeni": new_class}, actor=actor)
+        return self.repo.get_issue(issue_id)
+
+    def change_status(self, issue_id: int, status: str, actor: str | None, note: str | None = None,
+                      team: str | None = None) -> dict:
+        issue = self.repo.set_status(issue_id, status, actor, note, team=team)
+        self._feedback_for_status(issue_id, status, actor)
+        return issue
+
+    def _feedback_for_status(self, issue_id: int, status: str, actor: str | None) -> None:
+        """Saha kararından eğitim örneği: yanlış tespit = hasarsız örnek, onarıldı = modelin tespiti doğrulandı."""
+        if status in ("acik", "ekip_yonlendirildi"):  # yeniden açıldı: bekleyen kararlar geri alınır
+            self.repo.drop_pending_samples(issue_id, ("yanlis_tespit", "dogrulandi"))
+            return
+        existing = {s["report_id"]: s for s in self.repo.samples_for_issue(issue_id)}
+        fix = next((s["meta"] for s in existing.values() if s["kind"] == "sinif_duzeltme"), None)
+        for r in self.repo.reports_for_training(issue_id):
+            if status == "yanlis_tespit":
+                self.repo.upsert_sample(report_id=r["id"], issue_id=issue_id, kind="yanlis_tespit", labels=[],
+                                        meta={"model": sorted({d["cls"] for d in r["detections"]})}, actor=actor)
+            elif status == "onarildi" and existing.get(r["id"], {}).get("kind") != "sinif_duzeltme":
+                labels = [{"sinif": fix["yeni"] if fix and d["cls"] == fix["eski"] else d["cls"], "kutu": d["box"]}
+                          for d in r["detections"]]
+                self.repo.upsert_sample(report_id=r["id"], issue_id=issue_id,
+                                        kind="sinif_duzeltme" if fix else "dogrulandi", labels=labels,
+                                        meta=fix or {}, actor=actor)
+
+    def delete_issue(self, issue_id: int, actor: str | None, reason: str | None) -> int:
+        """Kaydı fotoğraflarıyla birlikte kalıcı siler (ör. yanlışlıkla gönderilen kişisel fotoğraf)."""
+        removed = self.repo.delete_issue(issue_id, actor, reason)
+        for name in removed["media"]:
+            (self.settings.media_dir / name).unlink(missing_ok=True)
+        for name in removed["training"]:
+            (self.settings.training_dir / name).unlink(missing_ok=True)
+        return len(removed["media"]) + len(removed["training"])
 
     def fill_missing_districts(self) -> int:
         """İlçe sınırları sonradan eklendiyse eski kayıtların ilçesini doldurur."""
@@ -221,7 +283,10 @@ class RoadDamagePipeline:
         paths = self.repo.expired_media(self.settings.retention_days)
         for p in paths:
             (self.settings.media_dir / p).unlink(missing_ok=True)
-        return len(paths)
+        training = self.repo.expired_training_images(self.settings.retention_days)
+        for p in training:
+            (self.settings.training_dir / p).unlink(missing_ok=True)
+        return len(paths) + len(training)
 
 
 def issue_to_feature(issue: dict) -> dict:
@@ -245,6 +310,7 @@ def issue_to_feature(issue: dict) -> dict:
             "skor_detayi": ctx.get("skor"),
             "goruntu_url": f"/media/{issue['image_path']}" if issue.get("image_path") else None,
             "ilce": issue.get("district"),
+            "ekip": issue.get("team"),
             "olusturma": issue["created_at"],
             "guncelleme": issue["updated_at"],
             "onarim": {

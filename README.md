@@ -42,6 +42,8 @@ flowchart LR
 | Yönetici girişi | Panel, arıza listesi, görseller ve durum değişiklikleri yalnızca belediye personeline açık; vatandaş bildirimi ve takibi girişsiz. İmzalı oturum çerezi (HttpOnly, SameSite=Strict), PBKDF2 şifre özeti, giriş deneme sınırı, durum değişikliğinde "kim, ne zaman" kaydı | `app/auth.py` |
 | Vatandaş takibi | Bildirene özel takip kodu (ör. `K7M2-Q9XD`); `/takip` sayfasında Alındı → Ekip yönlendirildi → Onarıldı adımları ve onarım sonrası fotoğrafı. İş emri numarası sıralı olduğu için takipte kullanılmaz (başkasının kaydı tahmin edilemesin) | `app/static/takip.html` |
 | Onarım kanıtı | "Onarıldı" fotoğrafla kaydedilir: fotoğraf maskelenip saklanır, model hasar kalıp kalmadığını kontrol eder, konum kayıttan 50 m'den uzaksa uyarır; panelde önce/sonra yan yana | `app/pipeline.py` |
+| Kayıt yönetimi | Haritadaki kayıtta **Yönet**: ekibe atama (ekip listesi `TEAMS`), hasar türünü düzeltme (öncelik yeniden hesaplanır), not ekleme, kaydın geçmişi; fotoğraflarıyla kalıcı silme (gerekçe ve iki adımlı onay). Başlıktaki **İşlem geçmişi**: tüm sistemde kim, ne zaman, ne yaptı; silinen kayıtların izi dahil | `app/static/index.html`, `app/repository.py` |
+| Sahadan eğitime | Yöneticinin hasar türü düzeltmesi, “Yanlış tespit” (hasarsız örnek) ve onarım (doğrulanmış tespit) kararları kendiliğinden eğitim örneği olur. **Eğitim verisi** ekranında yönetici örnekleri görür (kırmızı: model, yeşil: etiket), onaylar ya da hariç tutar; saha doğrulaması (model kaç kayıtta doğru bildi) burada görünür. Onaylananlar YOLO formatında `saha_egitim_*.zip` olarak iner; Drive'a konunca 03 notebook'u eğitime ekler. Colab'ın sürekli açık olması gerekmez | `app/training.py` |
 | Filtre, istatistik, dışa aktarma | İlçe (OpenStreetMap ilçe sınırları), hasar türü ve durum filtresi; günlük bildirim/onarım grafiği, ortalama ekip yönlendirme ve onarım süresi; filtrelenmiş kayıtları GeoJSON (Netcad, ArcGIS, QGIS) ve CSV (Excel) indirme | `app/repository.py`, `app/export.py` |
 
 ## Model sonuçları
@@ -150,7 +152,7 @@ pip install -r requirements-dev.txt
 python scripts/download_models.py
 cp .env.example .env      # yerelde de okunur: ADMIN_PASSWORD, SECRET_KEY
 uvicorn app.main:app --reload
-pytest                    # 89 test: analiz hattı, API, giriş, takip, onarım, dışa aktarma
+pytest                    # 100 test: analiz hattı, API, giriş, takip, onarım, kayıt yönetimi, dışa aktarma
 ```
 
 Birden çok personel hesabı: `ADMIN_USERS=ali:sifre1,veli:sifre2`. Şifre yerine özet yazmak için `python -m app.auth` (özeti tek tırnak içine alın).
@@ -167,9 +169,17 @@ Birden çok personel hesabı: `ADMIN_USERS=ali:sifre1,veli:sifre2`. Şifre yerin
 | `GET /health` | Model, KVKK dedektörleri, bağlam verisi, giriş durumu |
 | `POST /api/giris`, `POST /api/cikis`, `GET /api/oturum` | Personel oturumu (`{"kullanici", "sifre"}`) |
 | **Personele özel (giriş gerekli)** | |
-| `GET /api/issues?durum=acik,ekip_yonlendirildi&sinif=D40&ilce=Nilüfer&min_oncelik=45` | Arızalar, GeoJSON `FeatureCollection` (EPSG:4326), önceliğe göre sıralı |
+| `GET /api/issues?durum=acik,ekip_yonlendirildi&sinif=D40&ilce=Nilüfer&ekip=Ekip 2&min_oncelik=45` | Arızalar, GeoJSON `FeatureCollection` (EPSG:4326), önceliğe göre sıralı |
 | `GET /api/issues/{id}` | Arıza, tüm bildirimleri ve durum geçmişi (kim, ne zaman) |
-| `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit" \| "acik", "aciklama": "..."}` |
+| `PATCH /api/issues/{id}` | `{"durum": "ekip_yonlendirildi" \| "onarildi" \| "yanlis_tespit" \| "acik", "aciklama": "...", "ekip": "Ekip 2"}` |
+| `POST /api/issues/{id}/not` | `{"metin": "..."}`: kayda not |
+| `POST /api/issues/{id}/sinif` | `{"sinif": "D00"}`: hasar türünü düzelt, öncelik yeniden hesaplanır |
+| `DELETE /api/issues/{id}` | `{"gerekce": "..."}`: kaydı fotoğraflarıyla kalıcı sil (iz işlem geçmişinde kalır) |
+| `GET /api/gecmis?limit=100` | Son işlemler: kim, ne zaman, hangi kayıtta ne yaptı |
+| `GET /api/ayarlar` | Ekip listesi ve hasar sınıfları |
+| `GET /api/egitim?durum=bekliyor` | Eğitim örnekleri ve saha doğrulaması |
+| `POST /api/egitim/{id}` | `{"durum": "onaylandi" \| "haric" \| "bekliyor"}`: değerlendirme |
+| `GET /api/egitim-paketi` | Onaylı örnekler, YOLO formatında zip |
 | `POST /api/issues/{id}/onarim` | Onarım fotoğrafı (`image`, isteğe bağlı `lat`, `lon`): kaydı kapatır, hasar kalıp kalmadığını kontrol eder |
 | `GET /api/istatistik?gun=30&ilce=...&sinif=...` | Günlük bildirim/onarım, durum, sınıf ve ilçe dağılımı, ortalama ekip yönlendirme ve onarım süresi |
 | `GET /api/disa-aktar?bicim=geojson\|csv&...` | Filtrelenmiş kayıtları indir (CSV: Türkçe Excel için noktalı virgül ve UTF-8 BOM) |

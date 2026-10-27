@@ -129,8 +129,8 @@ def test_retention_purges_closed_issue_images(make_pipeline, settings):
     image = settings.media_dir / p["goruntu_url"].split("/")[-1]
     pl.repo.update_issue(p["id"], status="onarildi")
     settings.retention_days = -1  # süresi dolmuş say
-    assert pl.purge_expired_media() == 1
-    assert not image.exists()
+    assert pl.purge_expired_media() == 2  # işaretli görsel + eğitim kopyası
+    assert not image.exists() and list(settings.training_dir.iterdir()) == []
     assert pl.repo.get_issue(p["id"])["image_path"] is None
 
 

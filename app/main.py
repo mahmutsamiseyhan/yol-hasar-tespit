@@ -31,7 +31,8 @@ from .labeling import LabelStore, create_router
 from .ratelimit import RateLimiter
 from .pipeline import AnalysisError, RoadDamagePipeline, issue_to_feature
 from .privacy import build_default_masker
-from .repository import ALL_STATUSES, TR_TZ, Repository
+from .repository import ALL_STATUSES, SAMPLE_STATUSES, TR_TZ, Repository
+from .training import build_package, preview_jpeg, sample_title
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -61,6 +62,23 @@ def build_pipeline(settings: Settings) -> RoadDamagePipeline:
 class StatusUpdate(BaseModel):
     durum: str
     aciklama: str | None = Field(None, max_length=500)
+    ekip: str | None = Field(None, max_length=60, description="Ekip yönlendirilirken hangi ekip")
+
+
+class NoteIn(BaseModel):
+    metin: str = Field(min_length=1, max_length=500)
+
+
+class ClassFix(BaseModel):
+    sinif: str
+
+
+class SampleReview(BaseModel):
+    durum: str
+
+
+class DeleteIn(BaseModel):
+    gerekce: str | None = Field(None, max_length=300)
 
 
 class Login(BaseModel):
@@ -283,21 +301,22 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         return StreamingResponse(app.state.events.stream(request.is_disconnected), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    def filtered(durum: str | None, sinif: str | None, ilce: str | None, min_oncelik: int = 0) -> dict:
+    def filtered(durum: str | None, sinif: str | None, ilce: str | None, min_oncelik: int = 0,
+                 ekip: str | None = None) -> dict:
         statuses = [s for s in (durum or "").split(",") if s]
         if any(s not in ALL_STATUSES for s in statuses):
             raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(ALL_STATUSES)}")
         if sinif and sinif not in CLASS_LABELS_TR:
             raise HTTPException(422, f"Geçersiz hasar sınıfı. Geçerli değerler: {', '.join(CLASS_LABELS_TR)}")
         issues = p().repo.list_issues(statuses=statuses or None, damage_class=sinif, district=ilce,
-                                      min_priority=min_oncelik)
+                                      min_priority=min_oncelik, team=ekip)
         return feature_collection([issue_to_feature(i) for i in issues])
 
     @app.get("/api/issues")
     def list_issues(durum: str | None = None, sinif: str | None = None, ilce: str | None = None,
-                    min_oncelik: int = 0, _: str = Depends(staff)):
-        """Filtreler: durum (virgülle birden çok), sinif (D00/D10/D20/D40), ilce, min_oncelik."""
-        return filtered(durum, sinif, ilce, min_oncelik)
+                    ekip: str | None = None, min_oncelik: int = 0, _: str = Depends(staff)):
+        """Filtreler: durum (virgülle birden çok), sinif (D00/D10/D20/D40), ilce, ekip, min_oncelik."""
+        return filtered(durum, sinif, ilce, min_oncelik, ekip)
 
     @app.get("/api/issues/{issue_id}")
     def get_issue(issue_id: int, _: str = Depends(staff)):
@@ -320,9 +339,103 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
             raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(ALL_STATUSES)}")
         if not p().repo.get_issue(issue_id):
             raise HTTPException(404, "Arıza bulunamadı.")
-        feature = issue_to_feature(p().repo.set_status(issue_id, body.durum, user, body.aciklama))
+        if body.ekip and body.ekip not in settings.teams:
+            raise HTTPException(422, f"Geçersiz ekip. Tanımlı ekipler: {', '.join(settings.teams)}")
+        feature = issue_to_feature(p().change_status(issue_id, body.durum, user, body.aciklama, team=body.ekip))
         publish_status(feature, user)
         return feature
+
+    def existing(issue_id: int) -> dict:
+        issue = p().repo.get_issue(issue_id)
+        if not issue:
+            raise HTTPException(404, "Arıza bulunamadı.")
+        return issue
+
+    @app.post("/api/issues/{issue_id}/not")
+    def add_note(issue_id: int, body: NoteIn, request: Request, user: str = Depends(staff)):
+        """Kayda serbest not (ör. “asfalt ekibi yarın sabah”). Geçmişte kim, ne zaman olarak görünür."""
+        guard(write_limit, request)
+        existing(issue_id)
+        p().repo.log_event(issue_id, "not", user, body.metin.strip())
+        feature = issue_to_feature(p().repo.get_issue(issue_id))
+        publish_status(feature, user)
+        return {"ariza": feature, "gecmis": p().repo.list_events(issue_id)}
+
+    @app.post("/api/issues/{issue_id}/sinif")
+    def fix_class(issue_id: int, body: ClassFix, request: Request, user: str = Depends(staff)):
+        """Modelin hasar türünü düzeltme; öncelik puanı yeniden hesaplanır. Düzeltmeler yeniden eğitimde kullanılır."""
+        guard(write_limit, request)
+        existing(issue_id)
+        if body.sinif not in CLASS_LABELS_TR:
+            raise HTTPException(422, f"Geçersiz hasar sınıfı. Geçerli değerler: {', '.join(CLASS_LABELS_TR)}")
+        feature = issue_to_feature(p().correct_class(issue_id, body.sinif, user))
+        publish_status(feature, user)
+        return {"ariza": feature, "gecmis": p().repo.list_events(issue_id)}
+
+    @app.delete("/api/issues/{issue_id}")
+    def delete_issue(issue_id: int, request: Request, body: DeleteIn | None = None, user: str = Depends(staff)):
+        """Kaydı fotoğraflarıyla birlikte kalıcı siler. Kimin, neyi, neden sildiği işlem geçmişinde kalır."""
+        guard(write_limit, request)
+        issue = existing(issue_id)
+        removed = p().delete_issue(issue_id, user, body.gerekce if body else None)
+        log.info("Kayıt silindi: %s (%s), %d görsel", issue["work_order_no"], user, removed)
+        app.state.events.publish({"tip": "silindi", "id": issue_id, "is_emri_no": issue["work_order_no"],
+                                  "kullanici": user})
+        return {"silindi": issue["work_order_no"], "silinen_gorsel": removed}
+
+    @app.get("/api/gecmis")
+    def history(limit: int = 100, _: str = Depends(staff)):
+        """Denetim için son işlemler: kim, ne zaman, hangi kayıtta ne yaptı (silinen kayıtlar dahil)."""
+        return {"islemler": p().repo.recent_history(max(1, min(limit, 500)))}
+
+    # ---------- Saha geri bildiriminden eğitim verisi ----------
+    @app.get("/api/egitim")
+    def training_samples(durum: str | None = None, _: str = Depends(staff)):
+        """Yöneticinin kararlarından oluşan eğitim örnekleri ve saha doğrulaması (model kaç kayıtta doğru bildi)."""
+        if durum and durum not in SAMPLE_STATUSES:
+            raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(SAMPLE_STATUSES)}")
+        samples = p().repo.list_samples(durum)
+        return {"ozet": p().repo.sample_summary(), "ornekler": [{
+            "id": s["id"], "tur": s["kind"], "baslik": sample_title(s), "durum": s["status"],
+            "is_emri_no": s["work_order_no"], "ariza_id": s["issue_id"], "etiket_sayisi": len(s["labels"]),
+            "olusturan": s["created_by"], "degerlendiren": s["reviewed_by"], "guncelleme": s["updated_at"],
+            "onizleme_url": f"/api/egitim/{s['id']}/onizleme.jpg"} for s in samples]}
+
+    @app.get("/api/egitim/{sample_id}/onizleme.jpg", include_in_schema=False)
+    def training_preview(sample_id: int, _: str = Depends(staff)):
+        s = p().repo.get_sample(sample_id)
+        if not s or not s.get("clean_image"):
+            raise HTTPException(404, "Örnek bulunamadı.")
+        try:
+            data = preview_jpeg(p().settings.training_dir / s["clean_image"], s)
+        except FileNotFoundError:
+            raise HTTPException(404, "Örnek görseli yok.") from None
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, no-cache"})
+
+    @app.post("/api/egitim/{sample_id}")
+    def review_training_sample(sample_id: int, body: SampleReview, request: Request, user: str = Depends(staff)):
+        """Değerlendirme: onaylandi (eğitime girer), haric (girmez), bekliyor (karar geri alınır)."""
+        guard(write_limit, request)
+        if body.durum not in SAMPLE_STATUSES:
+            raise HTTPException(422, f"Geçersiz durum. Geçerli değerler: {', '.join(SAMPLE_STATUSES)}")
+        if not p().repo.get_sample(sample_id):
+            raise HTTPException(404, "Örnek bulunamadı.")
+        p().repo.review_sample(sample_id, body.durum, user)
+        return {"id": sample_id, "durum": body.durum, "ozet": p().repo.sample_summary()}
+
+    @app.get("/api/egitim-paketi")
+    def training_package(_: str = Depends(staff)):
+        """Onaylı örnekler, YOLO formatında zip. Drive'daki yol-hasar-tespit klasörüne konunca 03 notebook'u ekler."""
+        samples = p().repo.list_samples("onaylandi")
+        if not samples:
+            raise HTTPException(422, "Onaylanmış eğitim örneği yok. Önce değerlendirme ekranında örnek onaylayın.")
+        name = f"saha_egitim_{datetime.now(TR_TZ).strftime('%Y%m%d_%H%M')}.zip"
+        return Response(build_package(samples, p().settings.training_dir), media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    @app.get("/api/ayarlar")
+    def panel_settings(_: str = Depends(staff)):
+        return {"ekipler": settings.teams, "siniflar": CLASS_LABELS_TR}
 
     @app.post("/api/issues/{issue_id}/onarim")
     async def record_repair(
@@ -373,11 +486,11 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
 
     @app.get("/api/disa-aktar")
     def export(bicim: str = "geojson", durum: str | None = None, sinif: str | None = None,
-               ilce: str | None = None, _: str = Depends(staff)):
+               ilce: str | None = None, ekip: str | None = None, _: str = Depends(staff)):
         """Filtrelenmiş kayıtlar: GeoJSON (Netcad, ArcGIS, QGIS katmanı) ya da CSV (Excel)."""
         if bicim not in ("geojson", "csv"):
             raise HTTPException(422, "Biçim geojson ya da csv olmalı.")
-        fc = filtered(durum, sinif, ilce)
+        fc = filtered(durum, sinif, ilce, ekip=ekip)
         name = f"yol_hasar_{datetime.now(TR_TZ).strftime('%Y%m%d_%H%M')}.{bicim}"
         headers = {"Content-Disposition": f'attachment; filename="{name}"'}
         if bicim == "csv":

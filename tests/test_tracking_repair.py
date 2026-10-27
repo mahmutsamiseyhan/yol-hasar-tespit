@@ -92,7 +92,7 @@ def test_retention_also_purges_repair_photos(make_pipeline, settings):
     pl.detector = FakeDetector([])
     repair = pl.record_repair(issue_id, jpeg_bytes(), "ekip")["ariza"]["properties"]["onarim"]["goruntu_url"]
     settings.retention_days = -1
-    assert pl.purge_expired_media() == 2
+    assert pl.purge_expired_media() == 3  # tespit + onarım + eğitim kopyası
     assert not (settings.media_dir / repair.split("/")[-1]).exists()
 
 
@@ -133,8 +133,8 @@ def test_csv_export_escapes_formulas():
         "oncelik_seviyesi": "yuksek", "durum": "acik", "bildirim_sayisi": 1, "ilce": None,
         "yol_adi": "-Yol", "yol_sinifi": "local", "olusturma": "2026-10-27T06:00:00+00:00", "onarim": None}}]}
     row = list(csv.reader(io.StringIO(export_csv(fc).lstrip("﻿")), delimiter=";"))[1]
-    assert row[0] == "'=HYPERLINK(1)" and row[8] == "'-Yol"
-    assert row[12] == "2026-10-27 09:00"  # Türkiye saati
+    assert row[0] == "'=HYPERLINK(1)" and row[9] == "'-Yol"
+    assert row[13] == "2026-10-27 09:00"  # Türkiye saati
 
 
 def test_dashboard_stats_daily_counts_and_response_times(make_pipeline):

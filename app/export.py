@@ -13,7 +13,7 @@ LEVEL_TR = {"kritik": "Kritik", "yuksek": "Yüksek", "orta": "Orta", "dusuk": "D
 CSV_COLUMNS = [
     ("is_emri_no", "İş emri no"), ("hasar_sinifi", "Hasar sınıfı"), ("hasar_adi", "Hasar"),
     ("oncelik_puani", "Öncelik puanı"), ("oncelik_seviyesi", "Öncelik"), ("durum", "Durum"),
-    ("bildirim_sayisi", "Bildirim sayısı"), ("ilce", "İlçe"), ("yol_adi", "Yol"), ("yol_sinifi", "Yol sınıfı"),
+    ("bildirim_sayisi", "Bildirim sayısı"), ("ekip", "Ekip"), ("ilce", "İlçe"), ("yol_adi", "Yol"), ("yol_sinifi", "Yol sınıfı"),
     ("enlem", "Enlem"), ("boylam", "Boylam"), ("olusturma", "Oluşturma"), ("onarim_tarihi", "Onarım tarihi"),
     ("onarim_suresi_saat", "Onarım süresi (saat)"), ("onarim_kontrolu", "Onarım fotoğrafı kontrolü"),
 ]

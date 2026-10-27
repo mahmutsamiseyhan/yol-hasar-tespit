@@ -115,6 +115,9 @@ class Settings:
     secret_key: bytes = field(default_factory=lambda: (os.getenv("SECRET_KEY") or "").encode() or secrets.token_bytes(32))
     session_hours: float = field(default_factory=lambda: _env_float("SESSION_HOURS", 12))
     login_limit_per_min: int = field(default_factory=lambda: int(os.getenv("LOGIN_LIMIT_PER_MIN", 10)))
+    # Saha ekipleri: "Ekip yönlendir" derken seçilir (TEAMS="Asfalt 1,Asfalt 2,Yama ekibi")
+    teams: list = field(default_factory=lambda: [t.strip() for t in os.getenv("TEAMS", "Ekip 1,Ekip 2,Ekip 3").split(",")
+                                                 if t.strip()])
     # Telefonların erişeceği genel HTTPS adresi (ör. tünel adresi); paneldeki QR kod bunu gösterir
     public_url: str | None = field(default_factory=lambda: (os.getenv("PUBLIC_URL") or "").rstrip("/") or None)
     # Etiket düzeltme aracının çalıştığı klasör (görüntü + YOLO etiketleri)
@@ -146,6 +149,11 @@ class Settings:
     @property
     def media_dir(self) -> Path:
         return self.data_dir / "media"
+
+    @property
+    def training_dir(self) -> Path:
+        """Maskelenmiş, kutu çizilmemiş kopyalar: yalnızca saha geri bildiriminden eğitim için (dışarı sunulmaz)."""
+        return self.data_dir / "egitim"
 
 
 def get_settings() -> Settings:
