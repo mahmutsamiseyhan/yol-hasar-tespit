@@ -30,7 +30,9 @@ ufw --force enable >/dev/null
 
 echo "==> Kod"
 if [ -d "$DIR/.git" ]; then
-  git -C "$DIR" pull -q
+  # pull yerine fetch + reset: GitHub geçmişi yeniden yazılsa da güncelleme çalışır (.env ve veriler git dışında)
+  git -C "$DIR" fetch -q origin main
+  git -C "$DIR" reset -q --hard origin/main
 else
   # Klasör önceden oluşturulmuş olabilir (model dosyası kopyalandıysa): yerinde başlat
   mkdir -p "$DIR"
