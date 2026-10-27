@@ -2,6 +2,8 @@
 
 Saha araçlarından ve vatandaşlardan gelen yol fotoğraflarını **önceliklendirilmiş, CBS uyumlu iş emirlerine** dönüştüren, onarımı fotoğrafla kapatan ve vatandaşa takip imkânı veren uçtan uca bir prototip.
 
+**Canlı demo:** [yolhasari.tech](https://yolhasari.tech) (personel paneli, giriş gerekir) · Vatandaş: [yolhasari.tech/bildir](https://yolhasari.tech/bildir), [yolhasari.tech/takip](https://yolhasari.tech/takip)
+
 ```mermaid
 flowchart LR
     A[Fotoğraf / video<br>+ GPS] --> B[YOLO11m<br>hasar tespiti<br>sınıf bazlı eşik]

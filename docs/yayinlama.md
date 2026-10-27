@@ -1,6 +1,6 @@
-# Yayınlama: Türkiye'deki bir sunucuda kalıcı HTTPS adresi
+# Yayınlama: kalıcı HTTPS adresi
 
-Amaç: uygulama her zaman açık olsun, telefonla her yerden `https://...` adresinden açılsın (telefonlar kamera ve konum iznini yalnızca HTTPS'te verir). Veri Türkiye'deki sunucuda kalır.
+Amaç: uygulama her zaman açık olsun, telefonla her yerden `https://...` adresinden açılsın (telefonlar kamera ve konum iznini yalnızca HTTPS'te verir).
 
 Kurulum: **Docker** (uygulama) + **Caddy** (otomatik HTTPS, Let's Encrypt). Dosyalar: `deploy/`.
 
