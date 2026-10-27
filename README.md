@@ -1,28 +1,33 @@
 # Bursa Yol Hasarı Karar Destek Sistemi (PoC)
 
-Saha araçlarından ve vatandaşlardan gelen yol fotoğraflarını **önceliklendirilmiş, CBS uyumlu iş emirlerine** dönüştüren uçtan uca bir prototip.
+Saha araçlarından ve vatandaşlardan gelen yol fotoğraflarını **önceliklendirilmiş, CBS uyumlu iş emirlerine** dönüştüren, onarımı fotoğrafla kapatan ve vatandaşa takip imkânı veren uçtan uca bir prototip.
 
 ```mermaid
 flowchart LR
-    A[Fotoğraf / video<br>+ GPS] --> B[YOLO11<br>hasar tespiti]
+    A[Fotoğraf / video<br>+ GPS] --> B[YOLO11m<br>hasar tespiti<br>sınıf bazlı eşik]
     B --> C[Şiddet<br>sınıf × boyut]
     A --> D[KVKK maskeleme<br>yüz · kişi · plaka]
-    C --> E[Konum bağlamı<br>OSM yol sınıfı · okul/hastane]
+    C --> E[Konum bağlamı<br>OSM yol sınıfı · okul/hastane · ilçe]
     E --> F{15 m içinde<br>açık kayıt?}
     F -- evet --> G[Mevcut kaydı güncelle<br>bildirim sayısı ↑]
     F -- hayır --> H[Yeni arıza<br>iş emri no]
     G --> I[Öncelik 1-100]
     H --> I
-    I -- ≥ 70 --> J[Kritik iş emri<br>kuyruğun başında]
-    I --> K[GeoJSON API<br>+ harita arayüzü]
+    I --> K[Personel paneli<br>giriş · harita · kuyruk<br>istatistik · GeoJSON/CSV]
     D --> K
+    K --> L[Ekip yönlendir]
+    L --> M[Onarım fotoğrafı<br>model kalan hasarı kontrol eder]
+    H -. takip kodu .-> V[Vatandaş /takip<br>Alındı → Ekip → Onarıldı]
+    M -. onarım fotoğrafı .-> V
 ```
+
+**İki kapı:** Vatandaş giriş yapmadan fotoğraf gönderir (`/bildir`) ve kendisine verilen kodla bildirimini izler (`/takip`). Harita, kayıtlar, fotoğraflar, durum değişiklikleri, istatistik ve dışa aktarma yalnızca giriş yapmış belediye personeline açıktır.
 
 ## Neler yapıyor?
 
 | Katman | Ne yapıyor | Dosya |
 |---|---|---|
-| Hasar tespiti | RDD2022 ile eğitilmiş YOLO11: boyuna çatlak (D00), enine çatlak (D10), timsah sırtı (D20), çukur (D40) | `app/detector.py` |
+| Hasar tespiti | RDD2022 + Türkiye görüntüleriyle eğitilmiş YOLO11m: boyuna çatlak (D00), enine çatlak (D10), timsah sırtı (D20), çukur (D40); her sınıf için ayrı güven eşiği; dikey fotoğraflarda yol bölgesi ayrıca yüksek çözünürlükte taranır | `app/detector.py` |
 | Şiddet ve öncelik | Hasarın kendisi (şiddet) ile ekibin önce nereye gideceği (öncelik) ayrı hesaplanır | `app/severity.py` |
 | Konum bağlamı | Hasar ana arterde mi, ara sokakta mı? 150 m içinde okul/hastane var mı? (OpenStreetMap, çevrimdışı) | `app/context.py` |
 | KVKK | Kişi, yüz ve plaka bölgeleri **diske yazılmadan önce** maskelenir; ham görüntü saklanmaz; saklama süresi dolan görseller silinir | `app/privacy.py` |
@@ -30,7 +35,7 @@ flowchart LR
 | İş emri | Her arızaya iş emri numarası (YH-yıl-sıra); 70 ve üzeri puan kritik olarak iş kuyruğunun başına alınır | `app/repository.py` |
 | Video | Saha aracı videosunda ByteTrack takibi: her hasar bir kez gönderilir, GPS zamanla eşlenir | `scripts/process_video.py` |
 | Arayüz | Leaflet haritası, fotoğraf yükleme, önceliğe göre iş kuyruğu, saha geri bildirimi, ayrıntılı analiz raporu | `app/static/index.html` |
-| Mobil bildirim | `/bildir`: telefon kamerası, zorunlu GPS konumu (doğruluk gösterilir), KVKK onayı, gönderim öncesi küçültme; vatandaş veya saha ekibi | `app/static/bildir.html` |
+| Mobil bildirim | `/bildir`: telefon kamerası, zorunlu GPS konumu (doğruluk gösterilir), KVKK onayı, gönderim öncesi küçültme; sonuçta takip kodu. "Saha ekibi" seçeneği yalnızca giriş yapmış personele görünür | `app/static/bildir.html` |
 | Canlı panel | Yeni bildirimler ve durum değişiklikleri panele anında düşer (Server-Sent Events); bildirim kartı, takip modu, QR kod | `app/events.py` |
 | Yönetici girişi | Panel, arıza listesi, görseller ve durum değişiklikleri yalnızca belediye personeline açık; vatandaş bildirimi ve takibi girişsiz. İmzalı oturum çerezi (HttpOnly, SameSite=Strict), PBKDF2 şifre özeti, giriş deneme sınırı, durum değişikliğinde "kim, ne zaman" kaydı | `app/auth.py` |
 | Vatandaş takibi | Bildirene özel takip kodu (ör. `K7M2-Q9XD`); `/takip` sayfasında Alındı → Ekip yönlendirildi → Onarıldı adımları ve onarım sonrası fotoğrafı. İş emri numarası sıralı olduğu için takipte kullanılmaz (başkasının kaydı tahmin edilemesin) | `app/static/takip.html` |
@@ -42,7 +47,7 @@ flowchart LR
 İki model aynı veri bölümleriyle eğitildi (RDD2022'nin 5 ülkesi: 17.818 eğitim, 2.225 doğrulama görüntüsü) ve modellerin **hiç görmediği** aynı 2.232 test görüntüsünde (4.030 hasar) ölçüldü.
 
 - **v1:** YOLO11s, 640 px ([01_model_egitimi_colab.ipynb](notebooks/01_model_egitimi_colab.ipynb))
-- **v2 (uygulamada):** YOLO11m, 800 px; eğitim bölümüne Türkiye'nin 24 şehrinden 598 sağlam yol görüntüsü eklendi (Mapillary, yarı otomatik etiket; Bursa hariç) ([03_model_v2_gece_egitimi.ipynb](notebooks/03_model_v2_gece_egitimi.ipynb), [turkiye_veri_hazirla.py](scripts/turkiye_veri_hazirla.py))
+- **v2 (uygulamada):** YOLO11m, 800 px; eğitim bölümüne Türkiye'nin 20 ilinden (25 bölge) 598 sağlam yol görüntüsü eklendi (Mapillary, yarı otomatik etiket; Bursa hariç) ([03_model_v2_gece_egitimi.ipynb](notebooks/03_model_v2_gece_egitimi.ipynb), [turkiye_veri_hazirla.py](scripts/turkiye_veri_hazirla.py))
 
 | AP50 | v1 | v2 |
 |---|---|---|
@@ -90,7 +95,7 @@ K_konum   : otoyol/devlet yolu 1.0 · ana arter 0.9 · tali 0.8 · toplayıcı 0
 B_bildirim: 1 + 0.25 × ln(bildirim sayısı)
 ```
 
-Model güven skoru şiddete **katılmaz**; yalnızca eşik olarak kullanılır (`CONF_THRESHOLD`). Güven, modelin ne kadar emin olduğunu gösterir, hasarın ne kadar kötü olduğunu değil.
+Model güven skoru şiddete **katılmaz**; yalnızca eşik olarak kullanılır (sınıf bazlı eşikler `models/esikler.json`, dosya yoksa tüm sınıflar için `CONF_THRESHOLD`). Güven, modelin ne kadar emin olduğunu gösterir, hasarın ne kadar kötü olduğunu değil. Eşiğin altında kalan tespitler kayıt açmaz, analiz raporunda "zayıf aday" olarak gösterilir.
 
 | Seviye | Puan | Önerilen aksiyon (Fen İşleri belirler) |
 |---|---|---|
@@ -103,12 +108,13 @@ Model güven skoru şiddete **katılmaz**; yalnızca eşik olarak kullanılır (
 
 ### 1. Modeli eğitin (Google Colab)
 
-1. Bu repoyu GitHub'a yükleyin.
-2. [`notebooks/01_model_egitimi_colab.ipynb`](notebooks/01_model_egitimi_colab.ipynb) dosyasını Colab'da açın, T4 GPU seçin ve `REPO_URL` değerini düzenleyin.
-3. Önce `QUICK=True` ile deneyin, sonra tam eğitimi başlatın.
-4. Drive'daki `yol-hasar-tespit/best.pt` dosyasını bu projede `models/best.pt` konumuna koyun.
+Colab'da **Dosya → Not defteri aç → GitHub** sekmesinden bu repoyu açın.
 
-Notebook sunum için gereken grafikleri de üretir: sınıf dağılımı, eğitim eğrileri, karışıklık matrisi, test metrikleri, hata analizi ve örnek tahminler.
+1. **v1:** [`notebooks/01_model_egitimi_colab.ipynb`](notebooks/01_model_egitimi_colab.ipynb), T4 GPU. Önce `QUICK=True` ile deneyin, sonra tam eğitimi başlatın. Sonuç Drive'da `yol-hasar-tespit/best.pt`. Sunum grafiklerini de üretir: sınıf dağılımı, eğitim eğrileri, karışıklık matrisi, test metrikleri, hata analizi, örnek tahminler.
+2. **v2 (uygulamadaki model):** [`notebooks/03_model_v2_gece_egitimi.ipynb`](notebooks/03_model_v2_gece_egitimi.ipynb), L4 GPU, "Tümünü çalıştır" (gece boyu, kesilirse kaldığı yerden devam eder).
+   - Türkiye verisi isteğe bağlıdır: `python scripts/turkiye_veri_hazirla.py` (Mapillary token gerekir) ile üretilen `data/turkiye_egitim.zip` dosyasını Drive'daki `yol-hasar-tespit` klasörüne yükleyin.
+   - Notebook v1 ile v2'yi aynı test setinde kıyaslar ve sınıf bazlı eşikleri doğrulama setinde hesaplar.
+3. Drive'daki `yol-hasar-tespit/v2/` klasöründen `best_v2.pt` dosyasını `models/best.pt`, `esikler_v2.json` dosyasını `models/esikler.json` olarak koyun.
 
 ### 2. Docker ile çalıştırın
 
@@ -140,9 +146,12 @@ Türkiye'deki bir sunucuda kalıcı HTTPS adresiyle yayınlama: [docs/yayinlama.
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 python scripts/download_models.py
+cp .env.example .env      # yerelde de okunur: ADMIN_PASSWORD, SECRET_KEY
 uvicorn app.main:app --reload
-pytest
+pytest                    # 89 test: analiz hattı, API, giriş, takip, onarım, dışa aktarma
 ```
+
+Birden çok personel hesabı: `ADMIN_USERS=ali:sifre1,veli:sifre2`. Şifre yerine özet yazmak için `python -m app.auth` (özeti tek tırnak içine alın).
 
 ## API
 
@@ -177,8 +186,9 @@ GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir
 | Bursa sokak görüntüleri | [Mapillary](https://www.mapillary.com), `scripts/fetch_mapillary_bursa.py` | CC BY-SA 4.0 | Bursa test seti (alan farkı ölçümü) |
 | Bursa yol ağı, okul, hastane | OpenStreetMap, `scripts/fetch_osm_context.py` | ODbL | Konum katsayısı |
 | Bursa ilçe sınırları (17 ilçe) | OpenStreetMap, `scripts/fetch_osm_districts.py` | ODbL | İlçe filtresi ve istatistik |
+| Türkiye sokak görüntüleri (20 il, 25 bölge; Bursa hariç) | [Mapillary](https://www.mapillary.com), `scripts/turkiye_veri_hazirla.py` | CC BY-SA 4.0 | v2 eğitimine 598 sağlam yol örneği (yarı otomatik etiket) |
 
-**RDD2022'de Türkiye verisi yoktur.** Bu nedenle model ayrıca Bursa görüntülerinden oluşan bir test setinde ölçülür (notebook bölüm 6).
+**RDD2022'de Türkiye verisi yoktur.** Bu nedenle v2 eğitimine Türkiye görüntüleri eklendi ve model ayrıca, eğitimde hiç kullanılmayan Bursa görüntülerinden oluşan bir test setinde ölçülür.
 
 ### Bursa test seti oluşturma
 
@@ -201,7 +211,7 @@ python scripts/evaluate_bursa.py --model models/best_v1.pt --thresholds models/e
 
 ## Telefondan canlı bildirim
 
-`/bildir` sayfası telefonda kamerayı açar, GPS konumu alınmadan ve KVKK onayı verilmeden gönderime izin vermez. Bildirim analiz edilir ve panele anında düşer (ölçülen uçtan uca süre ~2-3 sn).
+`/bildir` sayfası telefonda kamerayı açar, GPS konumu alınmadan ve KVKK onayı verilmeden gönderime izin vermez. Bildirim analiz edilir ve panele anında düşer (ölçülen uçtan uca süre ~2-3 sn). Hasar bulunduysa vatandaşa bir takip kodu gösterilir ve cihazda saklanır; `/takip` sayfasında durum adımlarını ve onarım sonrası fotoğrafını görür.
 
 Telefon tarayıcıları kamera ve konum iznini yalnızca **HTTPS** adreslerde verir. Yerel ağdaki `http://192.168...` adresi bu yüzden çalışmaz. Demo için bilgisayardaki uygulamaya geçici bir HTTPS tüneli açılır ve adresi `PUBLIC_URL` olarak verilir; paneldeki **Telefonla bildir** QR kodu bu adresi gösterir. Tünel açıkken uygulama internetten erişilebilirdir: yalnızca demo süresince açık tutun.
 
@@ -213,7 +223,8 @@ python scripts/process_video.py --video tur.mp4 --gps tur.gpx --video-start 2026
 
 ## Sınırlılıklar ve yol haritası
 
-- **Alan farkı:** Model başka ülkelerin yollarıyla eğitildi. Bursa test seti bu farkı ölçer; pilot sürecinde toplanan, saha ekibince doğrulanan görüntülerle yeniden eğitim planlanmıştır (`yanlis_tespit` geri bildirimi).
+- **Alan farkı ve kaçırma:** v2 Bursa'da sağlam yollarda yanlış alarm vermiyor ama hasarlı yolların yaklaşık yarısında hasarı kaçırıyor. Türkiye verisine şimdilik yalnızca sağlam yol örnekleri girdi; Türk yollarından hasarlı örneklerin etiketlenmesi ve pilotta saha ekibince doğrulanan (`yanlis_tespit`, onarım fotoğrafları) görüntülerle yeniden eğitim planlanmıştır. Bursa test seti küçüktür (54 görüntü).
+- **Kimlik doğrulama:** PoC'ta personel hesapları ortam değişkeniyle tanımlanır ve tek rol vardır. Üretimde belediyenin kullanıcı dizinine (ör. Active Directory / SSO) bağlanma ve rol ayrımı (müdürlük, saha ekibi) önerilir.
 - **Boyut tahmini:** Vatandaş fotoğraflarında kamera açısı bilinmediği için boyut yaklaşıktır. Kalibre edilmiş araç kamerasında homografi ile m² hesaplanır.
 - **KVKK dedektörleri:** Varsayılan kurulum yüzleri (YuNet) ve kişileri tamamen, araçların plaka bölgesini temkinli biçimde maskeler. Üretimde Türk plakalarıyla eğitilmiş özel bir model önerilir (`PRIVACY_MODEL_PATH`).
 - **Veritabanı:** PoC'ta SQLite kullanılır. Üretimde PostGIS (`ST_DWithin` + GiST indeksi) ve belediyenin CBS altyapısıyla entegrasyon önerilir.
@@ -222,11 +233,13 @@ python scripts/process_video.py --video tur.mp4 --gps tur.gpx --video-start 2026
 ## Proje yapısı
 
 ```
-app/            FastAPI servisi, hat (pipeline), skor, KVKK, CBS modülleri, arayüz
-scripts/        veri indirme/dönüştürme, Mapillary, OSM, video işleme, model indirme
-notebooks/      Colab eğitim ve değerlendirme notebook'u
-tests/          birim ve API testleri (pytest)
-docs/           sunum notları
-data/           OSM bağlam verisi (çalışma zamanı verisi repoya girmez)
-models/         model ağırlıkları (repoya girmez)
+app/            FastAPI servisi: analiz hattı, skor, KVKK, konum bağlamı, giriş (auth.py), dışa aktarma
+app/static/     arayüz: panel (index), giriş, mobil bildirim (bildir), vatandaş takibi (takip), etiket aracı
+scripts/        RDD2022 indirme/dönüştürme, Mapillary (Bursa, Türkiye), OSM (yollar, ilçeler), Bursa değerlendirme, video
+notebooks/      Colab: 01 v1 eğitimi, 03 v2 gece eğitimi ve v1/v2 kıyası
+tests/          birim, API ve güvenlik testleri (pytest)
+deploy/         yayın kurulumu: Caddy (otomatik HTTPS), docker-compose.prod.yml, sunucu_kurulum.sh
+docs/           sunum notları, demo senaryosu, yayınlama rehberi
+data/           OSM yol ağı ve ilçe sınırları (çalışma zamanı verisi repoya girmez)
+models/         model ağırlıkları ve eşik dosyaları (repoya girmez)
 ```
