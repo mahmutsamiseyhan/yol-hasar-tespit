@@ -17,7 +17,7 @@ Kurulum: **Docker** (uygulama) + **Caddy** (otomatik HTTPS, Let's Encrypt). Dosy
 
 Sunucu açılınca panelde **IP adresini** ve **root şifresini** görürsünüz. **Şifreyi kimseyle paylaşmayın.**
 
-## 2. Kurulum anahtarını sunucuya ekleyin (sizin adımınız)
+## 2. Kurulum anahtarını sunucuya ekleyin
 Kurulumu şifresiz, SSH anahtarıyla yapacağım. İki yoldan biri:
 
 **a) Panelde "SSH anahtarı" alanı varsa** şu satırı yapıştırın:
