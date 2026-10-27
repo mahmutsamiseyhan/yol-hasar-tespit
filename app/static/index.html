@@ -253,7 +253,13 @@ async function api(url, opts) {
   if (res.status === 401) { location.href = "/giris?sonra=/"; throw new Error("Oturum sona erdi."); }
   return res;
 }
-const getJson = (url) => api(url).then((r) => r.json());
+// Hata yanıtını sessizce veri gibi kullanma: anlaşılır bir hata fırlat
+async function getJson(url) {
+  const res = await api(url);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Sunucu hatası (${res.status}): ${url}`);
+  return body;
+}
 
 const map = L.map("map").setView([40.1950, 29.0300], 13);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -486,7 +492,7 @@ document.getElementById("form").addEventListener("submit", async (e) => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Analiz başarısız");
     out.innerHTML = renderResult(data);
-    await loadDistricts();
+    loadDistricts().catch((e) => console.warn("İlçe listesi yenilenemedi:", e));  // analiz sonucunu engellemesin
     await loadIssues();
     showAnalysisPoint(data);
   } catch (err) {
@@ -743,7 +749,7 @@ setInterval(async () => {
 }, 15000);
 
 updateExportLinks();
-loadDistricts();
+loadDistricts().catch((e) => console.warn("İlçe listesi yüklenemedi:", e));
 loadIssues();
 connectEvents();
 </script>
