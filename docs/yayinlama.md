@@ -50,7 +50,7 @@ DNS kayıtlarını ücretsiz **Cloudflare DNS** ile yönetin:
 
 Alternatif: Alan adı firmasının destek hattından kendi DNS sunucularında alan adınız için bir A kaydı açmalarını isteyin.
 
-## 4. Kurulum (benim adımım)
+## 4. Kurulum
 Sunucu IP'sini ve seçtiğiniz adresi verdiğinizde:
 1. Model dosyasını sunucuya kopyalarım: `models/best.pt` → `/opt/yol-hasar-tespit/models/`
 2. Kurulum betiğini çalıştırırım: `DOMAIN=... bash deploy/sunucu_kurulum.sh`
