@@ -4,7 +4,7 @@ Amaç: uygulama her zaman açık olsun, telefonla her yerden `https://...` adres
 
 Kurulum: **Docker** (uygulama) + **Caddy** (otomatik HTTPS, Let's Encrypt). Dosyalar: `deploy/`.
 
-## 1. Sunucuyu kiralayın (sizin adımınız)
+## 1. Sunucu kiralama
 Örnek sağlayıcı: TuemCloud bulut sunucu. Seçimler:
 
 | Ayar | Öneri |

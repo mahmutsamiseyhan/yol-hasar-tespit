@@ -13,3 +13,8 @@ data/*
 !data/bursa_test/
 data/bursa_test/*
 !data/bursa_test/.gitkeep
+
+# Kişisel sunum ve sunucu notları: yerelde kalır
+docs/sunum_notlari.md
+docs/demo_senaryosu.md
+docs/canli_kurulum.md

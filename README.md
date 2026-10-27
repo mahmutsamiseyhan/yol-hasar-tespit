@@ -114,7 +114,7 @@ Model güven skoru şiddete **katılmaz**; yalnızca eşik olarak kullanılır (
 
 Colab'da **Dosya → Not defteri aç → GitHub** sekmesinden bu repoyu açın.
 
-1. **v1:** [`notebooks/01_model_egitimi_colab.ipynb`](notebooks/01_model_egitimi_colab.ipynb), T4 GPU. Önce `QUICK=True` ile deneyin, sonra tam eğitimi başlatın. Sonuç Drive'da `yol-hasar-tespit/best.pt`. Sunum grafiklerini de üretir: sınıf dağılımı, eğitim eğrileri, karışıklık matrisi, test metrikleri, hata analizi, örnek tahminler.
+1. **v1:** [`notebooks/01_model_egitimi_colab.ipynb`](notebooks/01_model_egitimi_colab.ipynb), T4 GPU. Önce `QUICK=True` ile deneyin, sonra tam eğitimi başlatın. Sonuç Drive'da `yol-hasar-tespit/best.pt`. Değerlendirme grafiklerini de üretir: sınıf dağılımı, eğitim eğrileri, karışıklık matrisi, test metrikleri, hata analizi, örnek tahminler.
 2. **v2 (uygulamadaki model):** [`notebooks/03_model_v2_gece_egitimi.ipynb`](notebooks/03_model_v2_gece_egitimi.ipynb), L4 GPU, "Tümünü çalıştır" (gece boyu, kesilirse kaldığı yerden devam eder).
    - Türkiye verisi isteğe bağlıdır: `python scripts/turkiye_veri_hazirla.py` (Mapillary token gerekir) ile üretilen `data/turkiye_egitim.zip` dosyasını Drive'daki `yol-hasar-tespit` klasörüne yükleyin.
    - Notebook v1 ile v2'yi aynı test setinde kıyaslar ve sınıf bazlı eşikleri doğrulama setinde hesaplar.
@@ -251,7 +251,7 @@ scripts/        RDD2022 indirme/dönüştürme, Mapillary (Bursa, Türkiye), OSM
 notebooks/      Colab: 01 v1 eğitimi, 03 v2 gece eğitimi ve v1/v2 kıyası
 tests/          birim, API ve güvenlik testleri (pytest)
 deploy/         yayın kurulumu: Caddy (otomatik HTTPS), docker-compose.prod.yml, sunucu_kurulum.sh
-docs/           sunum notları, demo senaryosu, yayınlama rehberi
+docs/           yayınlama rehberi
 data/           OSM yol ağı ve ilçe sınırları (çalışma zamanı verisi repoya girmez)
 models/         model ağırlıkları ve eşik dosyaları (repoya girmez)
 ```
