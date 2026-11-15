@@ -125,6 +125,7 @@ const minHits = () => (st.fps >= 4 ? 3 : 2);
 const LOST_MS = 1200;          // bu süre görülmeyen hasarın takibi kapanır ve en iyi karesi gönderilir
 const MATCH_IOU = 0.1;
 const NMS_IOU = 0.5;
+const MAX_DETS = 12;           // bir karede bundan fazla hasar: tutarsız model çıktısı sayılır, kare atlanır
 const SEND_GAP_MS = 3500;      // sunucunun istek sınırı (dakikada 20) aşılmasın
 const MAX_POS_AGE_MS = 60000;  // telefon dururken konum güncellenmez; bundan eski konum kullanılmaz
 const JPEG_QUALITY = 0.88;
@@ -163,24 +164,49 @@ async function loadModel() {
     ort.env.wasm.wasmPaths = ORT_DIST;
     ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
     setStatus(el, "Model başlatılıyor…");
-    // Ekran kartı (WebGPU) varsa onu, yoksa işlemciyi (WASM) kullan. ?ep=wasm ile işlemci zorlanabilir.
-    // İlk çalıştırma (ısınma) burada yapılır: hem sürüş başında takılma olmaz hem de çalışmayan ekran kartı elenir.
+    // Önce işlemci (WASM) oturumu kurulur ve bir deneme görüntüsünde çalıştırılır: bu hem ısınmadır hem de doğru sonuç
+    // için ölçüttür. Ekran kartı (WebGPU) bazı telefonlarda bu modelde yanlış sayılar üretiyor (her yerde "enine çatlak");
+    // bu yüzden ekran kartı ancak aynı görüntüde işlemciyle aynı sonucu verirse kullanılır. ?ep=wasm / ?ep=webgpu zorlar.
     const forced = new URLSearchParams(location.search).get("ep");
     const S = st.cfg.girdi_boyutu;
-    for (const ep of forced ? [forced] : navigator.gpu ? ["webgpu", "wasm"] : ["wasm"]) {
-      let session = null;
+    const probe = probeTensor(S);
+    const runOnce = async (session) => {
+      const out = await Promise.race([session.run({ [session.inputNames[0]]: probe }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("zaman aşımı")), 30000))]);
+      return out[session.outputNames[0]];
+    };
+    const make = (ep) => ort.InferenceSession.create(buf, { executionProviders: [ep], graphOptimizationLevel: "all" });
+    let cpu = null, ref = null;
+    if (forced !== "webgpu") {
       try {
-        session = await ort.InferenceSession.create(buf, { executionProviders: [ep], graphOptimizationLevel: "all" });
-        const warm = session.run({ [session.inputNames[0]]: new ort.Tensor("float32", new Float32Array(3 * S * S), [1, 3, S, S]) });
-        await Promise.race([warm, new Promise((_, reject) => setTimeout(() => reject(new Error("zaman aşımı")), 30000))]);
-        st.session = session;
-        st.provider = ep === "webgpu" ? "ekran kartı" : "işlemci";
-        break;
+        cpu = await make("wasm");
+        ref = await runOnce(cpu);
       } catch (e) {
-        console.warn(ep, e);
-        session?.release?.().catch(() => {});
+        console.warn("wasm", e);
+        cpu?.release?.().catch(() => {}); cpu = null; ref = null;
       }
     }
+    if (forced !== "wasm" && navigator.gpu) {
+      let gpu = null;
+      try {
+        setStatus(el, "Ekran kartı deneniyor…");
+        gpu = await make("webgpu");
+        const out = await runOnce(gpu);
+        const diff = ref ? maxDiff(out, ref) : 0;
+        if (diff <= 0.01) {
+          st.session = gpu; st.provider = "ekran kartı";
+          cpu?.release?.().catch(() => {});
+        } else {
+          console.warn("WebGPU sonucu işlemciden farklı (en büyük fark " + diff.toFixed(3) + "), işlemci kullanılacak");
+          st.gpuRejected = true;
+          gpu.release?.().catch(() => {});
+        }
+      } catch (e) {
+        console.warn("webgpu", e);
+        gpu?.release?.().catch(() => {});
+      }
+    }
+    if (!st.session && cpu) { st.session = cpu; st.provider = st.gpuRejected ? "işlemci (ekran kartı tutarsız çıktı verdi)" : "işlemci"; }
     if (!st.session) throw new Error("Model bu tarayıcıda çalıştırılamadı");
     setStatus(el, `Model hazır (${(got / 1e6).toFixed(0)} MB, ${st.provider} ile çalışıyor).`, "ok");
   } catch (e) {
@@ -227,6 +253,29 @@ function toTensor(w, h) {
   return { tensor: new ort.Tensor("float32", f, [1, 3, S, S]), scale, px, py };
 }
 
+// Ekran kartı ile işlemcinin sonucunu karşılaştırmak için sabit, desenli bir deneme görüntüsü (her açılışta aynı)
+function probeTensor(S) {
+  const n = S * S, f = new Float32Array(3 * n);
+  for (let c = 0; c < 3; c++)
+    for (let y = 0; y < S; y++)
+      for (let x = 0; x < S; x++)
+        f[c * n + y * S + x] = 0.5 + 0.45 * Math.sin(x * 0.071 + c * 1.3) * Math.cos(y * 0.053 - c * 0.7);
+  return new ort.Tensor("float32", f, [1, 3, S, S]);
+}
+
+// İki çıktı arasındaki en büyük göreli fark: kutu koordinatları ve sınıf puanları dahil bütün değerler.
+// Ekran kartının ağın herhangi bir yerinde yanlış hesaplaması burada görünür.
+function maxDiff(a, b) {
+  if (a.dims.join() !== b.dims.join()) return Infinity;
+  let m = 0;
+  for (let i = 0; i < a.data.length; i++) {
+    const d = Math.abs(a.data[i] - b.data[i]) / (1 + Math.abs(b.data[i]));
+    if (!(d === d)) return Infinity;   // NaN
+    if (d > m) m = d;
+  }
+  return m;
+}
+
 function iou(a, b) {
   const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
   const iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
@@ -252,6 +301,9 @@ function decode(out, meta, w, h) {
   dets.sort((a, b) => b.conf - a.conf);
   const kept = [];
   for (const d of dets) if (kept.every((k) => k.cls !== d.cls || iou(k.box, d.box) < NMS_IOU)) kept.push(d);
+  // Gerçek bir yol karesinde bu kadar çok ayrı hasar olmaz: model bozuk çıktı veriyordur, kare kullanılmaz
+  if (kept.length > MAX_DETS) { st.badFrames = (st.badFrames || 0) + 1; return []; }
+  st.badFrames = 0;
   return kept;
 }
 
@@ -405,7 +457,10 @@ function draw(w, h) {
 }
 
 function showHud() {
-  $("hudFps").textContent = `${st.fps.toFixed(1)} kare/sn · ${st.provider}`;
+  // Üst üste tutarsız kare: kullanıcı görsün (kareler zaten gönderilmiyor)
+  const bad = (st.badFrames || 0) >= 5;
+  $("hudFps").textContent = bad ? "Model tutarsız sonuç veriyor, kareler atlanıyor" : `${st.fps.toFixed(1)} kare/sn · ${st.provider}`;
+  $("hudFps").className = "chip" + (bad ? " warn" : "");
   const p = freshPos();
   $("hudGps").textContent = p ? `Konum ±${Math.round(p.acc)} m` : "Konum yok";
   $("hudGps").className = "chip" + (p && p.acc <= 30 ? "" : " warn");
