@@ -82,6 +82,11 @@ class DeleteIn(BaseModel):
     gerekce: str | None = Field(None, max_length=300)
 
 
+class BulkDeleteIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    gerekce: str | None = Field(None, max_length=300)
+
+
 class Login(BaseModel):
     kullanici: str = Field(max_length=100)
     sifre: str = Field(max_length=200)
@@ -414,6 +419,25 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
         app.state.events.publish({"tip": "silindi", "id": issue_id, "is_emri_no": issue["work_order_no"],
                                   "kullanici": user})
         return {"silindi": issue["work_order_no"], "silinen_gorsel": removed}
+
+    @app.post("/api/issues/toplu-sil")
+    def delete_issues(body: BulkDeleteIn, request: Request, user: str = Depends(staff)):
+        """İş kuyruğundan seçilen kayıtları tek istekte kalıcı siler (ör. deneme kayıtları).
+        Her kayıt ayrı ayrı işlem geçmişine yazılır; bulunamayanlar atlanır."""
+        guard(write_limit, request)
+        deleted, photos, missing = [], 0, []
+        for issue_id in dict.fromkeys(body.ids):          # aynı kimlik iki kez gelirse bir kez
+            issue = p().repo.get_issue(issue_id)
+            if not issue:
+                missing.append(issue_id)
+                continue
+            photos += p().delete_issue(issue_id, user, body.gerekce)
+            deleted.append({"id": issue_id, "is_emri_no": issue["work_order_no"]})
+        if deleted:
+            log.info("Toplu silme: %d kayıt (%s), %d görsel", len(deleted), user, photos)
+            app.state.events.publish({"tip": "silindi", "ids": [d["id"] for d in deleted],
+                                      "is_emri_nolari": [d["is_emri_no"] for d in deleted], "kullanici": user})
+        return {"silinen": deleted, "silinen_gorsel": photos, "bulunamayan": missing}
 
     @app.get("/api/gecmis")
     def history(limit: int = 100, _: str = Depends(staff)):

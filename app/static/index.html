@@ -109,6 +109,15 @@
   .msec.danger input { margin-bottom: 8px; }
   button.danger-btn { background: #fff; color: #a12622; border-color: #e7b4b1; font-weight: 600; }
   button.danger-btn[data-armed] { background: #c62828; color: #fff; border-color: #c62828; }
+  .qhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .qhead h2 { margin: 0; }
+  button.qsmall { font-size: 12px; padding: 3px 10px; }
+  .qbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+  .qbar input#qReason { flex: 1 1 160px; min-width: 0; }
+  .qbar label { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .queue-item.selecting { grid-template-columns: 22px 44px 1fr; }
+  .queue-item.sel { background: #fdecea; }
+  .queue-check { display: flex; align-items: center; }
   .hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; max-height: 220px; overflow-y: auto; }
   .hist li { background: #f6f8fb; border-radius: 6px; padding: 6px 8px; }
   .hist .when { color: var(--muted); font-size: 12px; }
@@ -219,7 +228,14 @@
       <div class="export">İndir: <a id="dlGeo" href="#" download>GeoJSON</a><a id="dlCsv" href="#" download>CSV</a><span class="count" id="count"></span></div>
     </section>
     <section>
-      <h2>İş kuyruğu (önceliğe göre)</h2>
+      <div class="qhead"><h2>İş kuyruğu (önceliğe göre)</h2>
+        <button id="qSelect" class="qsmall" type="button" title="Kuyruktan kayıt silmek için seçin">Seç</button></div>
+      <div id="qBar" class="qbar" hidden>
+        <label><input type="checkbox" id="qAll"> Tümü</label>
+        <span id="qCount" class="hint">0 seçili</span>
+        <input id="qReason" maxlength="300" placeholder="Gerekçe (ör. deneme kayıtları)" aria-label="Silme gerekçesi">
+        <button id="qDelete" class="danger-btn" type="button" disabled>Seçilenleri sil</button>
+      </div>
       <div id="queue"><div class="hint">Henüz açık arıza yok.</div></div>
     </section>
   </aside>
@@ -480,12 +496,15 @@ async function loadIssues() {
   $live.dataset.updated = new Date().toLocaleTimeString("tr-TR");
 }
 
+let lastQueue = [];
 function renderQueue(list) {
+  lastQueue = list;
   const q = document.getElementById("queue");
-  if (!list.length) { q.innerHTML = `<div class="hint">${filterParams(false).toString() ? "Bu filtrede açık arıza yok." : "Henüz açık arıza yok."}</div>`; return; }
+  if (!list.length) { q.innerHTML = `<div class="hint">${filterParams(false).toString() ? "Bu filtrede açık arıza yok." : "Henüz açık arıza yok."}</div>`; updateQBar(); return; }
   q.innerHTML = list.map((f) => {
-    const p = f.properties;
-    return `<div class="queue-item" data-id="${p.id}">
+    const p = f.properties, on = selected.has(p.id);
+    return `<div class="queue-item${selecting ? " selecting" : ""}${on ? " sel" : ""}" data-id="${p.id}">
+      ${selecting ? `<div class="queue-check"><input type="checkbox" tabindex="-1" aria-label="${esc(p.is_emri_no)} seç"${on ? " checked" : ""}></div>` : ""}
       <div class="queue-score" style="background:${LEVEL_COLORS[p.oncelik_seviyesi]}">${p.oncelik_puani}</div>
       <div>
         <div class="queue-title">${esc(p.hasar_adi)} · ${roadText(p)}</div>
@@ -494,11 +513,66 @@ function renderQueue(list) {
     </div>`;
   }).join("");
   q.querySelectorAll(".queue-item").forEach((el) => el.addEventListener("click", () => {
-    const m = markers[el.dataset.id];
+    const id = +el.dataset.id;
+    if (selecting) {   // seçim modunda tıklama haritaya gitmez, kaydı seçer
+      if (selected.has(id)) selected.delete(id); else selected.add(id);
+      el.classList.toggle("sel", selected.has(id));
+      el.querySelector("input").checked = selected.has(id);
+      updateQBar();
+      return;
+    }
+    const m = markers[id];
     showMapOnPhone();
     map.setView(m.getLatLng(), 17); m.openPopup();
   }));
+  updateQBar();
 }
+
+// ---------- İş kuyruğundan silme ----------
+// "Seç" ile kayıtlar işaretlenir; silme iki adımlı: ilk tıklama onay ister, 5 saniye içinde ikinci tıklama siler.
+// Her silinen kayıt işlem geçmişine ayrı ayrı yazılır (kim, ne zaman, gerekçe).
+let selecting = false, qArmTimer = null;
+const selected = new Set();
+function queueIds() { return lastQueue.map((f) => f.properties.id); }
+function disarmQ() { clearTimeout(qArmTimer); $("qDelete").removeAttribute("data-armed"); $("qDelete").textContent = "Seçilenleri sil"; }
+function updateQBar() {
+  const ids = queueIds();
+  for (const id of [...selected]) if (!ids.includes(id)) selected.delete(id);   // listeden düşenler (silindi, kapandı, filtre)
+  $("qCount").textContent = `${selected.size} seçili`;
+  $("qAll").checked = ids.length > 0 && selected.size === ids.length;
+  $("qDelete").disabled = !selected.size;
+  if (!selected.size) disarmQ();
+}
+$("qSelect").onclick = () => {
+  selecting = !selecting; selected.clear(); disarmQ();
+  $("qBar").hidden = !selecting; $("qSelect").textContent = selecting ? "Bitti" : "Seç";
+  renderQueue(lastQueue);
+};
+$("qAll").onchange = (e) => { selected.clear(); if (e.target.checked) queueIds().forEach((id) => selected.add(id)); renderQueue(lastQueue); };
+$("qDelete").onclick = async () => {
+  if (!selected.size) return;
+  if (!$("qDelete").hasAttribute("data-armed")) {
+    $("qDelete").setAttribute("data-armed", ""); $("qDelete").textContent = `Eminim, ${selected.size} kaydı kalıcı sil`;
+    qArmTimer = setTimeout(disarmQ, 5000);
+    return;
+  }
+  disarmQ();
+  const ids = [...selected];
+  ids.forEach((id) => selfDeleted.add(id));   // kendi silmemizin canlı yayın bildirimi ikinci kez gösterilmesin
+  $("qDelete").disabled = true;
+  try {
+    const res = await api("/api/issues/toplu-sil", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, gerekce: $("qReason").value.trim() || null }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Kayıtlar silinemedi.");
+    selected.clear(); $("qReason").value = "";
+    if (ids.includes(manageId)) $("manageModal").hidden = true;
+    await loadIssues();
+    toast("Kayıtlar silindi", `${d.silinen.length} kayıt · ${d.silinen_gorsel} fotoğraf silindi`, null, "#9aa5b1");
+  } catch (err) {
+    toast("Silme yapılamadı", err.message, null, "#c62828");
+  } finally { updateQBar(); }
+};
 
 async function loadStats() {
   const s = await getJson("/api/stats");
@@ -678,7 +752,7 @@ function renderResult(d) {
 
 // ---------- Kayıt yönetimi: ekip, hasar türü, not, silme ----------
 let manageId = null;
-let selfDeleted = null;
+const selfDeleted = new Set();   // bu sekmenin sildiği kayıtlar
 let settingsCache = { ekipler: [], siniflar: CLASS_TR };
 
 async function loadSettings() {
@@ -761,7 +835,7 @@ $("mDelete").onclick = async () => {
     return;
   }
   disarmDelete();
-  selfDeleted = manageId;  // kendi silmemizin canlı yayın bildirimi ikinci kez gösterilmesin
+  selfDeleted.add(manageId);  // kendi silmemizin canlı yayın bildirimi ikinci kez gösterilmesin
   const d = await manageCall(`/api/issues/${manageId}`, { method: "DELETE", body: JSON.stringify({ gerekce: $("mReason").value.trim() || null }) }, "");
   if (d) { $("manageModal").hidden = true; toast("Kayıt silindi", `${d.silindi} · ${d.silinen_gorsel} fotoğraf silindi`, null, "#9aa5b1"); }
 };
@@ -956,10 +1030,11 @@ function connectEvents() {
   });
   es.addEventListener("durum", () => { loadIssues(); if (!$("statsModal").hidden) loadDashboard(); refreshOpenDialogs(); });
   es.addEventListener("silindi", async (e) => {
-    const d = JSON.parse(e.data);
-    if (manageId === d.id) $("manageModal").hidden = true;
+    const d = JSON.parse(e.data), ids = d.ids || [d.id];   // tek kayıt ya da kuyruktan toplu silme
+    if (ids.includes(manageId)) $("manageModal").hidden = true;
     await loadIssues(); refreshOpenDialogs();
-    if (d.id !== selfDeleted) toast("Kayıt silindi", `${d.is_emri_no} · ${d.kullanici}`, null, "#9aa5b1");
+    if (!ids.every((id) => selfDeleted.has(id)))
+      toast("Kayıt silindi", d.ids ? `${d.ids.length} kayıt · ${d.kullanici}` : `${d.is_emri_no} · ${d.kullanici}`, null, "#9aa5b1");
   });
 }
 

@@ -42,7 +42,7 @@ flowchart LR
 | Yönetici girişi | Panel, arıza listesi, görseller ve durum değişiklikleri yalnızca belediye personeline açık; vatandaş bildirimi ve takibi girişsiz. İmzalı oturum çerezi (HttpOnly, SameSite=Strict), PBKDF2 şifre özeti, giriş deneme sınırı, durum değişikliğinde "kim, ne zaman" kaydı | `app/auth.py` |
 | Vatandaş takibi | Bildirene özel takip kodu (ör. `K7M2-Q9XD`); `/takip` sayfasında Alındı → Ekip yönlendirildi → Onarıldı adımları ve onarım sonrası fotoğrafı. İş emri numarası sıralı olduğu için takipte kullanılmaz (başkasının kaydı tahmin edilemesin) | `app/static/takip.html` |
 | Onarım kanıtı | "Onarıldı" fotoğrafla kaydedilir: fotoğraf maskelenip saklanır, model hasar kalıp kalmadığını kontrol eder, konum kayıttan 50 m'den uzaksa uyarır; panelde önce/sonra yan yana | `app/pipeline.py` |
-| Kayıt yönetimi | Haritadaki kayıtta **Yönet**: ekibe atama (ekip listesi `TEAMS`), hasar türünü düzeltme (öncelik yeniden hesaplanır), not ekleme, kaydın geçmişi; fotoğraflarıyla kalıcı silme (gerekçe ve iki adımlı onay). Başlıktaki **İşlem geçmişi**: tüm sistemde kim, ne zaman, ne yaptı; silinen kayıtların izi dahil | `app/static/index.html`, `app/repository.py` |
+| Kayıt yönetimi | Haritadaki kayıtta **Yönet**: ekibe atama (ekip listesi `TEAMS`), hasar türünü düzeltme (öncelik yeniden hesaplanır), not ekleme, kaydın geçmişi; fotoğraflarıyla kalıcı silme (gerekçe ve iki adımlı onay). **İş kuyruğunda Seç**: birden çok kaydı (ör. deneme kayıtları) tek seferde silme. Başlıktaki **İşlem geçmişi**: tüm sistemde kim, ne zaman, ne yaptı; silinen kayıtların izi dahil | `app/static/index.html`, `app/repository.py` |
 | Sahadan eğitime | Yöneticinin hasar türü düzeltmesi, “Yanlış tespit” (hasarsız örnek) ve onarım (doğrulanmış tespit) kararları kendiliğinden eğitim örneği olur. **Eğitim verisi** ekranında yönetici örnekleri görür (kırmızı: model, yeşil: etiket), onaylar ya da hariç tutar; saha doğrulaması (model kaç kayıtta doğru bildi) burada görünür. Onaylananlar YOLO formatında `saha_egitim_*.zip` olarak iner; Drive'a konunca 03 notebook'u eğitime ekler. Colab'ın sürekli açık olması gerekmez | `app/training.py` |
 | Filtre, istatistik, dışa aktarma | İlçe (OpenStreetMap ilçe sınırları), hasar türü ve durum filtresi; günlük bildirim/onarım grafiği, ortalama ekip yönlendirme ve onarım süresi; filtrelenmiş kayıtları GeoJSON (Netcad, ArcGIS, QGIS) ve CSV (Excel) indirme | `app/repository.py`, `app/export.py` |
 
@@ -153,7 +153,7 @@ pip install -r requirements-dev.txt
 python scripts/download_models.py
 cp .env.example .env      # yerelde de okunur: ADMIN_PASSWORD, SECRET_KEY
 uvicorn app.main:app --reload
-pytest                    # 100 test: analiz hattı, API, giriş, takip, onarım, kayıt yönetimi, dışa aktarma
+pytest                    # 105 test: analiz hattı, API, giriş, takip, onarım, kayıt yönetimi, dışa aktarma
 ```
 
 Birden çok personel hesabı: `ADMIN_USERS=ali:sifre1,veli:sifre2`. Şifre yerine özet yazmak için `python -m app.auth` (özeti tek tırnak içine alın).
@@ -176,6 +176,7 @@ Birden çok personel hesabı: `ADMIN_USERS=ali:sifre1,veli:sifre2`. Şifre yerin
 | `POST /api/issues/{id}/not` | `{"metin": "..."}`: kayda not |
 | `POST /api/issues/{id}/sinif` | `{"sinif": "D00"}`: hasar türünü düzelt, öncelik yeniden hesaplanır |
 | `DELETE /api/issues/{id}` | `{"gerekce": "..."}`: kaydı fotoğraflarıyla kalıcı sil (iz işlem geçmişinde kalır) |
+| `POST /api/issues/toplu-sil` | `{"ids": [3, 7], "gerekce": "..."}`: iş kuyruğundan seçilen kayıtları kalıcı sil (her biri işlem geçmişine yazılır) |
 | `GET /api/gecmis?limit=100` | Son işlemler: kim, ne zaman, hangi kayıtta ne yaptı |
 | `GET /api/ayarlar` | Ekip listesi ve hasar sınıfları |
 | `GET /api/egitim?durum=bekliyor` | Eğitim örnekleri ve saha doğrulaması |

@@ -80,6 +80,28 @@ def test_delete_removes_record_photos_and_tracking_but_keeps_audit(make_pipeline
         assert c.request("DELETE", f"/api/issues/{issue_id}").status_code == 404
 
 
+def test_bulk_delete_from_queue(make_pipeline, settings):
+    with TestClient(create_app(make_pipeline(detections=[BIG_POTHOLE]))) as c:
+        a = post_photo(c)["ariza"]["properties"]
+        b = post_photo(c, lat=LAT + 0.01)["ariza"]["properties"]
+        keep = post_photo(c, lat=LAT + 0.02)["ariza"]["properties"]
+        assert len(list(settings.media_dir.iterdir())) == 3
+
+        r = c.post("/api/issues/toplu-sil", json={"ids": [a["id"], b["id"], b["id"], 999], "gerekce": "Deneme kayıtları"})
+        assert r.status_code == 200
+        body = r.json()
+        assert [d["is_emri_no"] for d in body["silinen"]] == [a["is_emri_no"], b["is_emri_no"]]
+        assert body["bulunamayan"] == [999] and body["silinen_gorsel"] >= 2
+        assert [f["properties"]["id"] for f in c.get("/api/issues").json()["features"]] == [keep["id"]]
+        assert len(list(settings.media_dir.iterdir())) == 1
+
+        hist = c.get("/api/gecmis").json()["islemler"]
+        deleted = [h for h in hist if h["action"] == "silme"]
+        assert {h["work_order_no"] for h in deleted} == {a["is_emri_no"], b["is_emri_no"]}
+        assert all(h["note"] == "Deneme kayıtları" for h in deleted)
+        assert c.post("/api/issues/toplu-sil", json={"ids": []}).status_code == 422
+
+
 def test_history_lists_actions_across_records(make_pipeline):
     with TestClient(create_app(make_pipeline(detections=[BIG_POTHOLE]))) as c:
         a = post_photo(c)["ariza"]["properties"]["id"]
@@ -97,4 +119,5 @@ def test_admin_actions_require_login(make_pipeline, settings):
         assert c.post(f"/api/issues/{issue_id}/not", json={"metin": "x"}).status_code == 401
         assert c.post(f"/api/issues/{issue_id}/sinif", json={"sinif": "D00"}).status_code == 401
         assert c.request("DELETE", f"/api/issues/{issue_id}").status_code == 401
+        assert c.post("/api/issues/toplu-sil", json={"ids": [issue_id]}).status_code == 401
         assert c.get("/api/gecmis").status_code == 401 and c.get("/api/ayarlar").status_code == 401
