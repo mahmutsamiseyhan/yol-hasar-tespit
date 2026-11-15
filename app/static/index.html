@@ -53,6 +53,7 @@
   .live i { width: 8px; height: 8px; border-radius: 50%; background: #69f0ae; display: inline-block; box-shadow: 0 0 0 0 rgba(105,240,174,.7); animation: pulse 2s infinite; }
   .hbtn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.45); font-weight: 600; white-space: nowrap; }
   .hbtn:hover { background: rgba(255,255,255,.25); }
+  a.hbtn { display: inline-block; padding: 6px 10px; border-radius: 6px; text-decoration: none; font-size: 14px; }
   .user { font-size: 12px; opacity: .9; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
   .user button { background: none; border: 1px solid rgba(255,255,255,.45); color: #fff; font-size: 12px; padding: 3px 8px; }
   .follow { font-size: 11px; display: flex; align-items: center; gap: 4px; opacity: .9; cursor: pointer; margin: 0; color: #fff; }
@@ -200,6 +201,7 @@
   <button class="hbtn" id="openHistory" type="button">İşlem geçmişi</button>
   <button class="hbtn" id="openTrain" type="button">Eğitim verisi</button>
   <button class="hbtn" id="openQr" type="button">Telefonla bildir</button>
+  <a class="hbtn" id="openLive" href="/canli" target="_blank" rel="noopener" title="Telefon araçta: kamera yolu tarar, hasar bulunca konumla birlikte buraya gönderir">Araçtan canlı tarama</a>
   <label class="follow" title="Yeni hasar bildirimi gelince harita kendiliğinden o noktaya gitsin"><input type="checkbox" id="follow" checked>Otomatik git</label>
   <div class="live" title="Yeni bildirimler anında gelir"><i></i><span id="liveText">Canlı</span></div>
   <div class="user" id="user" hidden><span id="userName"></span><button id="logout" type="button">Çıkış</button></div>
