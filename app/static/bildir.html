@@ -30,6 +30,10 @@
   .btn { display: block; width: 100%; text-align: center; padding: 14px; border-radius: 10px; border: 0; font: inherit; font-weight: 600; cursor: pointer; }
   .btn.primary { background: var(--brand); color: #fff; }
   .btn.ghost { background: #eef2f7; color: var(--ink); margin-top: 8px; }
+  a.btn { text-decoration: none; }
+  .live-alt { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .live-alt-t { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+  .live-alt .btn.ghost { color: var(--brand); }
   .btn.send { background: var(--ok); color: #fff; font-size: 17px; padding: 16px; }
   .btn:disabled { opacity: .45; cursor: default; }
   .link { background: none; border: 0; color: var(--brand); font: inherit; font-size: 14px; padding: 8px 0 0; cursor: pointer; text-decoration: underline; }
@@ -83,6 +87,11 @@
       <button class="link" id="pickGallery" type="button">Galeriden seç</button>
       <div class="status" id="photoStatus" style="margin-top:6px">Hasarı yakından ve yolu gösterecek şekilde çekin.</div>
       <img id="preview" hidden alt="Seçilen fotoğraf">
+      <div class="live-alt">
+        <div class="live-alt-t">Araçla mı gidiyorsunuz?</div>
+        <div class="status">Telefonu ön cama takın; kamera yolu sürekli tarar, bulduğu hasarı konumuyla kendisi bildirir. Durup fotoğraf çekmeniz gerekmez.</div>
+        <a class="btn ghost" href="/canli">Araçtan canlı kamerayla bildir →</a>
+      </div>
     </div>
 
     <div class="card" id="sourceCard" hidden>

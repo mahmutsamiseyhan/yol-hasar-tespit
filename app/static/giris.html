@@ -24,6 +24,11 @@
   button:disabled { opacity: .6; cursor: wait; }
   .err { background: #fdecea; color: var(--err); border-radius: 8px; padding: 9px 11px; font-size: 14px; margin-top: 14px; }
   .foot { font-size: 13px; color: var(--muted); padding: 0 22px 20px; }
+  .alt { padding: 16px 22px 12px; border-top: 1px solid var(--line); }
+  .alt-t { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .alt-btn { display: block; text-align: center; padding: 10px; margin-bottom: 8px; border-radius: 8px; border: 1px solid #c9d8ea;
+             color: var(--brand); background: #f3f7fc; font-weight: 600; text-decoration: none; }
+  .alt-btn:hover { background: #e7eff9; }
   .foot a { color: var(--brand); }
 </style>
 </head>
@@ -41,7 +46,12 @@
     <div class="err" id="err" role="alert" hidden></div>
     <button id="submit" type="submit">Giriş yap</button>
   </form>
-  <div class="foot">Yol hasarı bildirmek için giriş gerekmez: <a href="/bildir">Hasar bildir</a> · <a href="/takip">Bildirimimi takip et</a></div>
+  <div class="alt">
+    <div class="alt-t">Giriş yapmadan hasar bildirin</div>
+    <a class="alt-btn" href="/bildir">Fotoğraf çekerek bildir</a>
+    <a class="alt-btn" href="/canli">Araçla giderken canlı kamerayla bildir</a>
+  </div>
+  <div class="foot"><a href="/takip">Bildirimimi takip et</a></div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
