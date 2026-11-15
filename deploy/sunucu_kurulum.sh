@@ -60,15 +60,17 @@ echo "==> Uygulama ve HTTPS başlatılıyor (ilk derleme birkaç dakika sürer)"
 cd "$DIR/deploy"
 docker compose -f docker-compose.prod.yml up -d --build
 
-echo "==> Sağlık kontrolü"
-for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null "https://$FIRST_HOST/health"; then
+echo "==> Sağlık kontrolü (model yüklenirken 1-2 dakika sürebilir)"
+for i in $(seq 1 60); do
+  # Uygulama açılırken Caddy 502 döner; bu beklenen bir durum, hata olarak yazdırılmaz
+  if curl -fs -o /dev/null "https://$FIRST_HOST/health"; then
     echo "Hazır: $PUBLIC_URL  (panel girişi: kullanıcı 'yonetici')"
     if [ "$NEW_PASSWORD" = 1 ]; then
       echo "Yönetici şifresi üretildi ve $ENV_FILE dosyasına yazıldı. Görmek için: sudo grep ADMIN_PASSWORD $ENV_FILE"
     fi
     exit 0
   fi
+  [ $((i % 6)) -eq 0 ] && echo "    ... uygulama açılıyor ($((i * 5)) sn)"
   sleep 5
 done
 echo "Uygulama henüz yanıt vermiyor. Kayıtlar: docker compose -f $DIR/deploy/docker-compose.prod.yml logs --tail 50"
