@@ -87,3 +87,22 @@ def test_mobile_page_and_qr_code(make_pipeline):
         assert qr.status_code == 200 and qr.headers["content-type"].startswith("image/svg+xml")
         assert c.get("/api/qr", params={"metin": "x" * 501}).status_code == 422
         assert "canli_baglanti" in c.get("/health").json()
+
+
+def test_live_scan_page_model_and_settings(make_pipeline, settings, tmp_path):
+    settings.live_model_path = tmp_path / "canli.onnx"
+    settings.live_thresholds_path = tmp_path / "esikler_canli.json"
+    with TestClient(create_app(make_pipeline())) as c:
+        page = c.get("/canli").text
+        assert "Canlı Yol Taraması" in page and "getUserMedia" in page and "/api/analyze-road" in page
+        cfg = c.get("/api/canli/ayar").json()
+        assert cfg["model_hazir"] is False and cfg["siniflar"] == ["D00", "D10", "D20", "D40"]
+        assert cfg["esikler"]["D40"] == settings.conf_threshold  # eşik dosyası yoksa genel eşik
+        assert c.get("/api/canli/model.onnx").status_code == 404
+
+        settings.live_model_path.write_bytes(b"onnx")
+        settings.live_thresholds_path.write_text('{"esikler": {"D40": 0.26}}', encoding="utf-8")
+        cfg = c.get("/api/canli/ayar").json()
+        assert cfg["model_hazir"] is True and cfg["esikler"]["D40"] == 0.26
+        model = c.get("/api/canli/model.onnx")
+        assert model.status_code == 200 and model.content == b"onnx" and "max-age" in model.headers["cache-control"]

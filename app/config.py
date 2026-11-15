@@ -125,6 +125,14 @@ class Settings:
         default_factory=lambda: Path(os.getenv("LABEL_DIR", ROOT_DIR / "data" / "bursa_test" / "etiket"))
     )
 
+    # Canlı tarama (/canli): telefonun tarayıcısında çalışan küçük model (ONNX) ve onun sınıf eşikleri.
+    # Telefon yalnızca birkaç karede gördüğü hasarın en iyi karesini gönderir; sunucu ana modelle tekrar bakar.
+    live_model_path: Path = field(default_factory=lambda: Path(
+        os.getenv("LIVE_MODEL_PATH") or Path(os.getenv("MODEL_DIR", ROOT_DIR / "models")) / "canli.onnx"))
+    live_thresholds_path: Path = field(default_factory=lambda: Path(
+        os.getenv("LIVE_THRESHOLDS_PATH") or Path(os.getenv("MODEL_DIR", ROOT_DIR / "models")) / "esikler_canli.json"))
+    live_imgsz: int = field(default_factory=lambda: int(os.getenv("LIVE_IMGSZ", 640)))
+
     # Mükerrer kayıt birleştirme yarıçapı (metre)
     merge_radius_m: float = field(default_factory=lambda: _env_float("MERGE_RADIUS_M", 15.0))
 

@@ -7,6 +7,7 @@ istatistik ve dışa aktarma.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from contextlib import asynccontextmanager
@@ -235,6 +236,37 @@ def create_app(pipeline: RoadDamagePipeline | None = None) -> FastAPI:
     @app.get("/takip", include_in_schema=False)
     def tracking_page():
         return FileResponse(STATIC_DIR / "takip.html")
+
+    # ---------- Canlı tarama: tespit telefonda, doğrulama sunucuda ----------
+    @app.get("/canli", include_in_schema=False)
+    def live_page():
+        # Çapraz köken yalıtımı: tarayıcı modeli işlemcide birden çok çekirdekle çalıştırabilsin (ekran kartı yoksa)
+        return FileResponse(STATIC_DIR / "canli.html", headers={
+            "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp"})
+
+    @app.get("/api/canli/ayar", tags=["canlı"])
+    def live_settings():
+        s = p().settings
+        thresholds = {}
+        if s.live_thresholds_path.exists():
+            data = json.loads(s.live_thresholds_path.read_text(encoding="utf-8"))
+            thresholds = {k: float(v) for k, v in data.get("esikler", data).items()}
+        return {
+            "model_hazir": s.live_model_path.exists(),
+            "girdi_boyutu": s.live_imgsz,
+            "siniflar": list(CLASS_LABELS_TR),
+            "adlar": CLASS_LABELS_TR,
+            "esikler": {c: thresholds.get(c, s.conf_threshold) for c in CLASS_LABELS_TR},
+            "birlestirme_yaricapi_m": s.merge_radius_m,
+        }
+
+    @app.get("/api/canli/model.onnx", include_in_schema=False)
+    def live_model():
+        path = p().settings.live_model_path
+        if not path.exists():
+            raise HTTPException(404, "Canlı tarama modeli yüklü değil (models/canli.onnx).")
+        # Telefon modeli bir kez indirir, sonraki açılışlarda önbellekten kullanır
+        return FileResponse(path, media_type="application/octet-stream", headers={"Cache-Control": "public, max-age=86400"})
 
     def tracked(kod: str, request: Request) -> tuple[dict, dict]:
         guard(track_limit, request)  # kod tahminini zorlaştırır

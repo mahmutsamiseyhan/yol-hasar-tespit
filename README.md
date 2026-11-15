@@ -119,6 +119,7 @@ Colab'da **Dosya → Not defteri aç → GitHub** sekmesinden bu repoyu açın.
    - Türkiye verisi isteğe bağlıdır: `python scripts/turkiye_veri_hazirla.py` (Mapillary token gerekir) ile üretilen `data/turkiye_egitim.zip` dosyasını Drive'daki `yol-hasar-tespit` klasörüne yükleyin.
    - Notebook v1 ile v2'yi aynı test setinde kıyaslar ve sınıf bazlı eşikleri doğrulama setinde hesaplar.
 3. Drive'daki `yol-hasar-tespit/v2/` klasöründen `best_v2.pt` dosyasını `models/best.pt`, `esikler_v2.json` dosyasını `models/esikler.json` olarak koyun.
+4. **v3 (Türkiye hasar örnekleri):** [`notebooks/04_model_v3_turkiye_hasar.ipynb`](notebooks/04_model_v3_turkiye_hasar.ipynb). v2'den devam eder; model ve çözünürlük aynı kalır, yalnızca elle etiketlenmiş Türkiye örnekleri eklenir (bkz. [Hasarlı Türkiye örnekleri](#hasarlı-türkiye-örnekleri-v3)). İsteğe bağlı olarak canlı tarama için telefon modelini (YOLO11n) de eğitir.
 
 ### 2. Docker ile çalıştırın
 
@@ -199,6 +200,7 @@ GeoJSON çıktısı Netcad, ArcGIS ve QGIS'e doğrudan katman olarak eklenebilir
 | Bursa yol ağı, okul, hastane | OpenStreetMap, `scripts/fetch_osm_context.py` | ODbL | Konum katsayısı |
 | Bursa ilçe sınırları (17 ilçe) | OpenStreetMap, `scripts/fetch_osm_districts.py` | ODbL | İlçe filtresi ve istatistik |
 | Türkiye sokak görüntüleri (20 il, 25 bölge; Bursa hariç) | [Mapillary](https://www.mapillary.com), `scripts/turkiye_veri_hazirla.py` | CC BY-SA 4.0 | v2 eğitimine 598 sağlam yol örneği (yarı otomatik etiket) |
+| Türkiye hasar adayları (25 şehir + Bursa; Bursa test noktalarının 150 m çevresi hariç) | [Mapillary](https://www.mapillary.com), `scripts/hasar_adaylari.py` | CC BY-SA 4.0 | v3 eğitimi (elle etiketlenmiş hasarlı ve zor sağlam örnekler) |
 
 **RDD2022'de Türkiye verisi yoktur.** Bu nedenle v2 eğitimine Türkiye görüntüleri eklendi ve model ayrıca, eğitimde hiç kullanılmayan Bursa görüntülerinden oluşan bir test setinde ölçülür.
 
@@ -233,6 +235,69 @@ Telefon tarayıcıları kamera ve konum iznini yalnızca **HTTPS** adreslerde ve
 python scripts/process_video.py --video tur.mp4 --gps tur.gpx --video-start 2026-10-26T09:15:00Z
 ```
 
+## Araçtan canlı tarama
+
+`/canli` sayfası telefon kamerasını sürekli açık tutar. Tespit **telefonun kendisinde** çalışır (ONNX Runtime Web; ekran kartı varsa WebGPU, yoksa işlemci): video hiçbir yere gönderilmez.
+
+1. Telefon kareleri tarar, hasarları ekranda kutuyla gösterir.
+2. Aynı hasar ardışık karelerde takip edilir; en az 2-3 karede görülmeyen titremeler elenir.
+3. Hasar kadrajdan çıkınca yalnızca **en net karesi** konumla birlikte `/api/analyze-road`'a gönderilir. Sunucu ana modelle tekrar bakar (iki aşamalı doğrulama), bulanıklaştırır ve kaydı açar; panel anında görür.
+4. Aynı sürüşte birleştirme yarıçapı (15 m) içindeki ikinci tespit gönderilmez: tek araç bildirim sayısını şişirmez.
+
+Telefon modeli `models/canli.onnx` ve eşikleri `models/esikler_canli.json` dosyasındadır. Şu an kullanılan model v3 notebook'unda telefon için eğitilen YOLO11n, 640 px (10 MB). Kıyas için bkz. [v3 sonucu](#v3-sonucu). Eski telefon modeline (v1, YOLO11s, 38 MB) dönmek için:
+
+```bash
+python scripts/export_canli_model.py --weights models/best_v1.pt --thresholds models/esikler_v1.json
+```
+
+Kamerasız deneme için sayfadaki **Kayıtlı bir yol videosuyla dene** bağlantısı bir video dosyasını aynı akıştan geçirir. `?ep=wasm` işlemciyi zorlar. Masaüstü Chromium'da işlemciyle (4 çekirdek) saniyede ~2 kare ölçüldü; telefondaki hız cihaza ve WebGPU desteğine bağlıdır, sahada ölçülmelidir.
+
+## Raspberry Pi araç kamerası
+
+Telefon yerine araca sabit bir **Raspberry Pi 5 + Camera Module 3 Wide** takılabilir. Pi projesi ayrı bir klasördedir (`yol_projesi`, kendi README'si var). Pi hasarı kendi üzerinde canlı bulur, mesafesini ve alanını ölçer, sürücüye tablette gösterir. Hasarı bulduğu kareyi de bu sunucuya **saha aracı** bildirimi olarak gönderir. Sunucu tarafında kod değişikliği gerekmez: Pi, canlı tarama sayfasıyla aynı uç noktayı (`/api/analyze-road`, `source=saha_araci`) kullanır.
+
+```
+Pi (YOLO11n, NCNN) ──hasar + GPS──► kuyruk (SD kart) ──internet──► /api/analyze-road
+                                                                  ana modelle doğrulama → KVKK maskeleme
+                                                                  → 15 m içinde açık kayıt varsa birleştir, yoksa iş emri aç
+```
+
+- **Hesap:** Pi'ye ayrı bir personel hesabı açın (`ADMIN_USERS=...,pi_arac1:<sifre>`). Pi bu hesapla giriş yapar; oturum düşerse yeniden girer.
+- **Konum:** Sunucu her bildirim için enlem/boylam ister. Varsayılan olarak konum, Pi panelinin açık olduğu telefondan gelir (tarayıcı konumu, ek cihaz gerekmez). İsteğe bağlı olarak USB GPS alıcısı da kullanılabilir. Konum yokken kare gönderilmez.
+- **İnternet yoksa:** Kareler Pi'nin SD kartında kuyrukta bekler, bağlantı gelince sırayla gönderilir (en az 3.2 sn arayla, sunucunun dakikada 20 bildirim sınırının altında).
+- **Tekrar önleme:** Pi aynı noktanın 15 m yakınından 10 dakika içinde ikinci kare göndermez; sunucu da yarıçap içindeki açık kayıtla birleştirir.
+- **KVKK:** Pi ham kareyi gönderir, yüz ve plakaları sunucu maskeler. Gönderilen kare Pi'den silinir.
+
+Bilgisayarda uçtan uca denendi: test veritabanıyla açılan sunucuya, simüle edilmiş hareketli GPS ve Bursa test görüntüleriyle bağlanıldı. Pi'nin gönderdiği karelerden iş emirleri açıldı, ilçe ve öncelik hesaplandı, yüzler maskelendi; sunucuyu kapatınca kareler kuyrukta birikti, açınca gönderildi. Gerçek araçta henüz denenmedi.
+
+## Hasarlı Türkiye örnekleri (v3)
+
+v2'nin Bursa'daki asıl eksiği kaçırma: eğitime Türkiye'den hiç hasarlı örnek girmedi. Örnekler modelle bulunur, insanla düzeltilir:
+
+```bash
+python scripts/hasar_adaylari.py --out data/hasar_adaylari            # Mapillary, 25 şehir + Bursa, model taslak kutuları
+LABEL_DIR=data/hasar_adaylari uvicorn app.main:app                    # http://localhost:8000/etiket
+python scripts/etiket_paketle.py --labels data/hasar_adaylari          # -> data/hasar_etiket.zip (Drive'a yükleyin)
+```
+
+- Etiket aracında **tamam** (kutular düzeltilmiş hasarlı yol), **hasarsız** (modelin yanıldığı sağlam yol: rögar, şerit, gölge; yanlış alarmı azaltan zor örnek) veya **kapsam dışı** seçilir.
+- Bursa test görüntülerinin 150 m yakınındaki görüntüler alınmaz; `etiket_paketle.py` Bursa test klasörünü paketlemeyi reddeder.
+
+### v3 sonucu
+
+v3 ([04_model_v3_turkiye_hasar.ipynb](notebooks/04_model_v3_turkiye_hasar.ipynb)) v2 ağırlıklarından devam etti. Eğitime 87 elle incelenmiş Türkiye görüntüsü 3'er kopya halinde eklendi (49 hasarlı, 38 zor sağlam). Ayrıca telefon için küçük bir model (YOLO11n, 640 px) eğitildi. Eğitim paketiyle Bursa test seti arasında ortak görüntü yok: dosya adı, içerik (md5) ve Mapillary kimliği karşılaştırıldı. Her model kendi sınıf eşikleriyle ölçüldü (`scripts/evaluate_bursa.py`). Telefon modelleri, telefonda olduğu gibi ONNX ile ve 640×640 kare girdiyle değerlendirildi.
+
+| | RDD2022 mAP50 | Bursa mAP50 | Bursa yanlış alarm | Bursa yakalama |
+|---|---|---|---|---|
+| **v2, sunucu** (YOLO11m, 800) | **0.663** | **0.327** | **0 / 37** | 9 / 17 |
+| v3, sunucu adayı (YOLO11m, 800) | 0.653 | 0.258 | 2 / 37 | 7 / 17 |
+| v1, eski telefon modeli (YOLO11s, 640, ONNX) | 0.621 | 0.324 | 7 / 37 | 11 / 17 |
+| **v3, telefon modeli** (YOLO11n, 640, ONNX) | 0.617 | 0.270 | **4 / 37** | **12 / 17** |
+
+- **Sunucuda v2 kaldı.** v3 hiçbir ölçüde v2'yi geçmedi. 49 hasarlı örnek, 22 bin RDD görüntüsünün yanında modeli değiştirmeye yetmedi. Farklar 1–2 görüntü düzeyinde olduğu için v3'ün daha kötü olduğu kesin değil, ama daha iyi olduğuna dair de bir kanıt yok.
+- **Telefonda v3 modeline geçildi.** Canlı taramanın asıl kararı olan görüntü düzeyinde daha çok hasar yakalıyor ve daha az yanlış alarm veriyor. Bursa'daki kutuların 24/32'sini oluşturan boyuna çatlakta (D00) AP50 0.35'ten 0.48'e çıktı. Model 3.6 kat küçük (10 MB'a karşı 38 MB). mAP50'deki düşüş enine çatlaktan (D10) geliyor: Bursa'da bu sınıftan yalnızca 4 kutu var.
+- Bursa test seti küçük (17 hasarlı görüntü, D20'de 1, D40'ta 3 kutu). Bir sonraki model kararı için önce bu set büyütülmeli.
+
 ## Sınırlılıklar ve yol haritası
 
 - **Alan farkı ve kaçırma:** v2 Bursa'da sağlam yollarda yanlış alarm vermiyor ama hasarlı yolların yaklaşık yarısında hasarı kaçırıyor. Türkiye verisine şimdilik yalnızca sağlam yol örnekleri girdi; Türk yollarından hasarlı örneklerin etiketlenmesi ve pilotta saha ekibince doğrulanan (`yanlis_tespit`, onarım fotoğrafları) görüntülerle yeniden eğitim planlanmıştır. Bursa test seti küçüktür (54 görüntü).
@@ -246,9 +311,9 @@ python scripts/process_video.py --video tur.mp4 --gps tur.gpx --video-start 2026
 
 ```
 app/            FastAPI servisi: analiz hattı, skor, KVKK, konum bağlamı, giriş (auth.py), dışa aktarma
-app/static/     arayüz: panel (index), giriş, mobil bildirim (bildir), vatandaş takibi (takip), etiket aracı
+app/static/     arayüz: panel (index), giriş, mobil bildirim (bildir), canlı tarama (canli), vatandaş takibi (takip), etiket aracı
 scripts/        RDD2022 indirme/dönüştürme, Mapillary (Bursa, Türkiye), OSM (yollar, ilçeler), Bursa değerlendirme, video
-notebooks/      Colab: 01 v1 eğitimi, 03 v2 gece eğitimi ve v1/v2 kıyası
+notebooks/      Colab: 01 v1 eğitimi, 03 v2 gece eğitimi ve v1/v2 kıyası, 04 v3 (Türkiye hasar örnekleri + telefon modeli)
 tests/          birim, API ve güvenlik testleri (pytest)
 deploy/         yayın kurulumu: Caddy (otomatik HTTPS), docker-compose.prod.yml, sunucu_kurulum.sh
 docs/           yayınlama rehberi

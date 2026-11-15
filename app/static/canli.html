@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b5394">
+<title>Canlı Yol Taraması · Bursa</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #fff; --ink: #1c2430; --muted: #5f6b7a; --line: #dfe4ea; --brand: #0b5394;
+    --ok: #2e7d32; --warn: #ef6c00; --err: #c62828;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body { font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: var(--brand); color: #fff; padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 14px; }
+  header h1 { margin: 0; font-size: 19px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
+  main { max-width: 560px; margin: 0 auto; padding: 14px 16px 28px; }
+  .card { background: var(--panel); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .card h2 { margin: 0 0 6px; font-size: 16px; }
+  .card ol { margin: 6px 0 0; padding-left: 20px; font-size: 14px; color: var(--muted); }
+  .status { font-size: 14px; color: var(--muted); }
+  .status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.err { color: var(--err); }
+  .btn { display: block; width: 100%; text-align: center; padding: 14px; border-radius: 10px; border: 0; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: #fff; font-size: 17px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .link { background: none; border: 0; color: var(--brand); font: inherit; font-size: 14px; padding: 10px 0 0; cursor: pointer; text-decoration: underline; display: block; margin: 0 auto; }
+  input[type=file] { display: none; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg label { border: 2px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; font-size: 15px; cursor: pointer; }
+  .seg input { display: none; }
+  .seg input:checked + span { color: var(--brand); font-weight: 700; }
+  .seg label:has(input:checked) { border-color: var(--brand); background: #eef4fb; }
+  .consent { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); }
+  .consent input { width: 22px; height: 22px; margin-top: 1px; flex: none; }
+  footer { text-align: center; font-size: 12px; color: var(--muted); padding: 0 16px 20px; }
+  footer a { color: var(--brand); }
+
+  /* Canlı görünüm: tam ekran kamera, üstte durum, altta son olaylar */
+  #live { position: fixed; inset: 0; background: #000; color: #fff; display: flex; flex-direction: column; z-index: 10; }
+  #stage { position: relative; flex: 1; min-height: 0; }
+  #stage video, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .hud { position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+  .chip { background: rgba(0,0,0,.6); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .chip.warn { background: rgba(239,108,0,.85); }
+  .bar { background: #11161d; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; margin-bottom: 8px; }
+  .counts b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .counts span { font-size: 12px; color: #aab4c0; }
+  #events { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; max-height: 92px; overflow-y: auto; }
+  #events li { padding: 4px 0; border-top: 1px solid #222a35; color: #d5dbe3; }
+  #events li.ok { color: #9be29f; } #events li.warn { color: #ffc27a; }
+  .btn.stop { background: var(--err); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Canlı Yol Taraması</h1>
+  <p>Bursa Yol Hasarı Karar Destek Sistemi</p>
+</header>
+<main id="setup">
+  <div class="card">
+    <h2>Nasıl çalışır?</h2>
+    <ol>
+      <li>Telefonu araçta ön cama, yolu görecek şekilde tutucuya takın.</li>
+      <li>Kamera açık kaldıkça telefon yolu kendi üzerinde tarar; görüntü dışarı gönderilmez.</li>
+      <li>Birkaç karede görülen hasarın yalnızca en net karesi konumla birlikte gönderilir; sunucu ana modelle tekrar bakar ve kayıt açar.</li>
+    </ol>
+    <div class="status warn" style="margin-top:8px">Sürüş sırasında telefona dokunmayın.</div>
+  </div>
+
+  <div class="card">
+    <div class="status" id="modelStatus">Model hazırlanıyor…</div>
+    <div class="status" id="locStatus" style="margin-top:4px">Konum bekleniyor…</div>
+  </div>
+
+  <div class="card" id="sourceCard" hidden>
+    <div class="seg">
+      <label><input type="radio" name="source" value="saha_ekibi" checked><span>Belediye saha ekibi</span></label>
+      <label><input type="radio" name="source" value="vatandas"><span>Vatandaş</span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="consent"><input type="checkbox" id="consent">
+      <span>Hasar bulunan karelerin ve konumumun yol hasarı bildirimi amacıyla işlenmesine onay veriyorum. Karelerdeki yüzler ve plakalar kaydedilmeden önce otomatik bulanıklaştırılır.</span></label>
+  </div>
+
+  <button class="btn primary" id="startCam" disabled>Kamerayla başlat</button>
+  <input id="videoFile" type="file" accept="video/*">
+  <button class="link" id="pickVideo" type="button" disabled>Kayıtlı bir yol videosuyla dene</button>
+</main>
+<footer id="foot"><a href="/bildir">Fotoğrafla bildir</a> · <a href="/takip">Bildirimimi takip et</a></footer>
+
+<section id="live" hidden>
+  <div id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div class="hud">
+      <span class="chip" id="hudFps">– kare/sn</span>
+      <span class="chip" id="hudGps">Konum yok</span>
+      <span class="chip" id="hudSpeed" hidden></span>
+      <span class="chip" id="hudQueue" hidden></span>
+    </div>
+  </div>
+  <div class="bar">
+    <div class="counts">
+      <div><b id="cSeen">0</b><span>görülen hasar</span></div>
+      <div><b id="cSent">0</b><span>gönderilen</span></div>
+      <div><b id="cSaved">0</b><span>kayıt açılan</span></div>
+    </div>
+    <ul id="events"></ul>
+    <button class="btn stop" id="stop">Taramayı bitir</button>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js" crossorigin="anonymous"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const ORT_DIST = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+// Hasar en az bu kadar karede görülmeli: tek karelik titremeler elenir. Yavaş cihazda araç hızlı geçtiği için 2 kare yeter.
+const minHits = () => (st.fps >= 4 ? 3 : 2);
+const LOST_MS = 1200;          // bu süre görülmeyen hasarın takibi kapanır ve en iyi karesi gönderilir
+const MATCH_IOU = 0.1;
+const NMS_IOU = 0.5;
+const SEND_GAP_MS = 3500;      // sunucunun istek sınırı (dakikada 20) aşılmasın
+const MAX_POS_AGE_MS = 60000;  // telefon dururken konum güncellenmez; bundan eski konum kullanılmaz
+const JPEG_QUALITY = 0.88;
+const WEIGHTS = { D40: 1.0, D20: 0.8, D10: 0.5, D00: 0.4 };
+const COLORS = { D40: "#e53935", D20: "#fb8c00", D10: "#fdd835", D00: "#26c6da" };
+const LEVEL_TR = { kritik: "kritik", yuksek: "yüksek", orta: "orta", dusuk: "düşük" };
+
+const st = {
+  cfg: null, session: null, provider: "", pos: null, running: false, fromFile: false,
+  tracks: [], nextId: 1, queue: [], sending: false, lastSend: 0, sentPlaces: [],
+  seen: 0, sent: 0, saved: 0, fps: 0, wakeLock: null, stream: null,
+};
+
+function setStatus(el, text, kind = "") { el.textContent = text; el.className = "status " + kind; }
+
+// ---------- Hazırlık: ayarlar, model, konum ----------
+async function loadModel() {
+  const el = $("modelStatus");
+  try {
+    st.cfg = await (await fetch("/api/canli/ayar")).json();
+    if (!st.cfg.model_hazir) return setStatus(el, "Canlı tarama modeli sunucuda yüklü değil.", "err");
+    const res = await fetch("/api/canli/model.onnx");
+    if (!res.ok) throw new Error("Model indirilemedi (" + res.status + ")");
+    const total = Number(res.headers.get("content-length")) || 0;
+    const reader = res.body.getReader();
+    const parts = []; let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value); got += value.length;
+      setStatus(el, total ? `Model indiriliyor: %${Math.round(100 * got / total)}` : `Model indiriliyor: ${(got / 1e6).toFixed(0)} MB`);
+    }
+    const buf = new Uint8Array(got); let off = 0;
+    for (const p of parts) { buf.set(p, off); off += p.length; }
+
+    ort.env.wasm.wasmPaths = ORT_DIST;
+    ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
+    setStatus(el, "Model başlatılıyor…");
+    // Ekran kartı (WebGPU) varsa onu, yoksa işlemciyi (WASM) kullan. ?ep=wasm ile işlemci zorlanabilir.
+    // İlk çalıştırma (ısınma) burada yapılır: hem sürüş başında takılma olmaz hem de çalışmayan ekran kartı elenir.
+    const forced = new URLSearchParams(location.search).get("ep");
+    const S = st.cfg.girdi_boyutu;
+    for (const ep of forced ? [forced] : navigator.gpu ? ["webgpu", "wasm"] : ["wasm"]) {
+      let session = null;
+      try {
+        session = await ort.InferenceSession.create(buf, { executionProviders: [ep], graphOptimizationLevel: "all" });
+        const warm = session.run({ [session.inputNames[0]]: new ort.Tensor("float32", new Float32Array(3 * S * S), [1, 3, S, S]) });
+        await Promise.race([warm, new Promise((_, reject) => setTimeout(() => reject(new Error("zaman aşımı")), 30000))]);
+        st.session = session;
+        st.provider = ep === "webgpu" ? "ekran kartı" : "işlemci";
+        break;
+      } catch (e) {
+        console.warn(ep, e);
+        session?.release?.().catch(() => {});
+      }
+    }
+    if (!st.session) throw new Error("Model bu tarayıcıda çalıştırılamadı");
+    setStatus(el, `Model hazır (${(got / 1e6).toFixed(0)} MB, ${st.provider} ile çalışıyor).`, "ok");
+  } catch (e) {
+    setStatus(el, "Model yüklenemedi: " + e.message, "err");
+  }
+  refresh();
+}
+
+function watchLocation() {
+  if (!navigator.geolocation) return setStatus($("locStatus"), "Bu cihaz konum vermiyor.", "err");
+  navigator.geolocation.watchPosition((p) => {
+    st.pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, speed: p.coords.speed, t: Date.now() };
+    setStatus($("locStatus"), `Konum alındı (±${Math.round(p.coords.accuracy)} m).`, p.coords.accuracy <= 30 ? "ok" : "warn");
+    refresh();
+  }, (e) => setStatus($("locStatus"), "Konum alınamadı: " + (e.code === 1 ? "izin verilmedi." : e.message), "err"),
+  { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+}
+
+function refresh() {
+  const ready = !!st.session && $("consent").checked;
+  $("startCam").disabled = !ready;
+  $("pickVideo").disabled = !ready;
+}
+
+// ---------- Görüntü -> model girdisi -> tespitler ----------
+const frame = document.createElement("canvas");  // tam çözünürlüklü kare (gönderilecek görüntü buradan alınır)
+const fctx = frame.getContext("2d", { willReadFrequently: false });
+const pre = document.createElement("canvas");    // modele giden kare kutusu
+const pctx = pre.getContext("2d", { willReadFrequently: true });
+
+function toTensor(w, h) {
+  const S = st.cfg.girdi_boyutu;
+  pre.width = pre.height = S;
+  // Eğitimdeki gibi en-boy oranı korunur, boşluk griyle doldurulur
+  const scale = Math.min(S / w, S / h);
+  const nw = Math.round(w * scale), nh = Math.round(h * scale);
+  const px = Math.floor((S - nw) / 2), py = Math.floor((S - nh) / 2);
+  pctx.fillStyle = "rgb(114,114,114)";
+  pctx.fillRect(0, 0, S, S);
+  pctx.drawImage(frame, px, py, nw, nh);
+  const d = pctx.getImageData(0, 0, S, S).data;
+  const n = S * S, f = new Float32Array(3 * n);
+  for (let i = 0, j = 0; i < n; i++, j += 4) { f[i] = d[j] / 255; f[i + n] = d[j + 1] / 255; f[i + 2 * n] = d[j + 2] / 255; }
+  return { tensor: new ort.Tensor("float32", f, [1, 3, S, S]), scale, px, py };
+}
+
+function iou(a, b) {
+  const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+  const iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  const inter = ix * iy;
+  const union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+function decode(out, meta, w, h) {
+  const data = out.data, N = out.dims[2], C = out.dims[1] - 4, names = st.cfg.siniflar;
+  const dets = [];
+  for (let i = 0; i < N; i++) {
+    let best = 0, bc = -1;
+    for (let c = 0; c < C; c++) { const s = data[(4 + c) * N + i]; if (s > best) { best = s; bc = c; } }
+    if (bc < 0 || best < st.cfg.esikler[names[bc]]) continue;
+    const cx = data[i], cy = data[N + i], bw = data[2 * N + i], bh = data[3 * N + i];
+    const box = [
+      Math.max(0, (cx - bw / 2 - meta.px) / meta.scale), Math.max(0, (cy - bh / 2 - meta.py) / meta.scale),
+      Math.min(w, (cx + bw / 2 - meta.px) / meta.scale), Math.min(h, (cy + bh / 2 - meta.py) / meta.scale),
+    ];
+    if (box[2] > box[0] && box[3] > box[1]) dets.push({ cls: names[bc], conf: best, box });
+  }
+  dets.sort((a, b) => b.conf - a.conf);
+  const kept = [];
+  for (const d of dets) if (kept.every((k) => k.cls !== d.cls || iou(k.box, d.box) < NMS_IOU)) kept.push(d);
+  return kept;
+}
+
+// ---------- Takip: aynı hasar ardışık karelerde tek hasar sayılır ----------
+function near(a, b) {
+  // Araç ilerledikçe kutu kareden kareye aşağı kayar: örtüşmese de yakınsa aynı hasar kabul edilir
+  const ca = [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2], cb = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+  const size = Math.max(a[2] - a[0], a[3] - a[1], b[2] - b[0], b[3] - b[1]);
+  return Math.hypot(ca[0] - cb[0], ca[1] - cb[1]) < 0.75 * size;
+}
+
+function updateTracks(dets, now) {
+  const improved = [];
+  const free = st.tracks.filter((t) => !t.done);
+  for (const d of dets) {
+    let match = null, bestIou = MATCH_IOU;
+    for (const t of free) { if (t.seenAt === now) continue; const v = iou(t.box, d.box); if (v > bestIou) { bestIou = v; match = t; } }
+    if (!match) match = free.find((t) => t.seenAt !== now && near(t.box, d.box)) || null;
+    if (!match) { match = { id: st.nextId++, hits: 0, classes: {}, best: null, done: false }; st.tracks.push(match); free.push(match); }
+    match.box = d.box; match.seenAt = now; match.hits++;
+    match.classes[d.cls] = (match.classes[d.cls] || 0) + 1;
+    if (!match.counted && match.hits >= minHits()) { match.counted = true; st.seen++; $("cSeen").textContent = st.seen; }
+    const area = (d.box[2] - d.box[0]) * (d.box[3] - d.box[1]);
+    const score = (WEIGHTS[d.cls] || 0.3) * area * d.conf;
+    if (!match.best || score > match.best.score) {
+      match.best?.bitmap?.close();
+      match.best = { score, cls: d.cls, conf: d.conf, pos: freshPos() };
+      improved.push(match);
+    }
+  }
+  return improved;
+}
+
+function freshPos() { return st.pos && Date.now() - st.pos.t <= MAX_POS_AGE_MS ? { ...st.pos } : null; }
+
+function closeLostTracks(now, all = false) {
+  for (const t of st.tracks) {
+    if (t.done || (!all && now - t.seenAt < LOST_MS)) continue;
+    t.done = true;
+    if (t.counted && t.best?.bitmap) enqueue(t);
+    else t.best?.bitmap?.close();
+  }
+  st.tracks = st.tracks.filter((t) => !t.done);
+}
+
+// ---------- Gönderim: her hasar için tek kare ----------
+function haversine(a, b) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function enqueue(track) {
+  const b = track.best;
+  const name = st.cfg.adlar[b.cls] || b.cls;
+  const pos = b.pos || freshPos();
+  if (!pos) { b.bitmap.close(); return addEvent(`${name}: konum yok, gönderilmedi.`, "warn"); }
+  // Aynı noktayı tek sürüşte iki kez göndermek bildirim sayısını şişirir (öncelik yapay olarak artar)
+  if (st.sentPlaces.some((p) => haversine(p, pos) < st.cfg.birlestirme_yaricapi_m)) {
+    b.bitmap.close(); return addEvent(`${name}: bu nokta zaten gönderildi.`);
+  }
+  st.sentPlaces.push(pos);
+  st.queue.push({ bitmap: b.bitmap, pos, name, conf: b.conf });
+  drainQueue();
+}
+
+async function drainQueue() {
+  if (st.sending || !st.queue.length) return showQueue();
+  st.sending = true;
+  showQueue();
+  const job = st.queue.shift();
+  const wait = st.lastSend + SEND_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  try {
+    const c = document.createElement("canvas");
+    c.width = job.bitmap.width; c.height = job.bitmap.height;
+    c.getContext("2d").drawImage(job.bitmap, 0, 0);
+    job.bitmap.close();
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", JPEG_QUALITY));
+    const fd = new FormData();
+    fd.append("image", blob, "canli.jpg");
+    fd.append("lat", job.pos.lat); fd.append("lon", job.pos.lon);
+    fd.append("konum_dogrulugu_m", Math.round(job.pos.acc));
+    fd.append("source", st.source);
+    st.lastSend = Date.now();
+    const res = await fetch("/api/analyze-road", { method: "POST", body: fd });
+    st.sent++; $("cSent").textContent = st.sent;
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      st.queue.unshift({ ...job, bitmap: await createImageBitmap(c) });
+      st.lastSend = Date.now() + 1000 * (Number(res.headers.get("Retry-After")) || 10);
+      addEvent("Sunucu yoğun, biraz sonra tekrar denenecek.", "warn");
+    } else if (!res.ok) {
+      addEvent(`${job.name}: gönderilemedi (${body.detail || res.status}).`, "warn");
+    } else if (body.hasar_tespit_edildi) {
+      st.saved++; $("cSaved").textContent = st.saved;
+      const pr = body.ariza.properties;
+      addEvent(`${pr.hasar_adi}: ${body.mevcut_kayitla_birlestirildi ? "mevcut kayda eklendi" : "kayıt açıldı"} · ${pr.is_emri_no} · öncelik ${pr.oncelik_puani} (${LEVEL_TR[pr.oncelik_seviyesi] || pr.oncelik_seviyesi})`, "ok");
+    } else {
+      addEvent(`${job.name} (%${Math.round(100 * job.conf)}): sunucudaki ana model doğrulamadı, kayıt açılmadı.`);
+    }
+  } catch (e) {
+    addEvent(`${job.name}: bağlantı hatası (${e.message}).`, "warn");
+  }
+  st.sending = false;
+  drainQueue();
+}
+
+function showQueue() {
+  const n = st.queue.length + (st.sending ? 1 : 0);
+  $("hudQueue").hidden = !n;
+  $("hudQueue").textContent = `${n} kare gönderiliyor`;
+}
+
+function addEvent(text, kind = "") {
+  const li = document.createElement("li");
+  li.className = kind;
+  li.textContent = new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " · " + text;
+  $("events").prepend(li);
+  while ($("events").children.length > 30) $("events").lastChild.remove();
+}
+
+// ---------- Çizim ----------
+const overlay = $("overlay");
+const octx = overlay.getContext("2d");
+
+function draw(w, h) {
+  if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
+  octx.clearRect(0, 0, w, h);
+  // Çizgi ve yazı ekranda okunur boyutta kalsın: video pikselinden ekran pikseline ölçek
+  const k = 1 / Math.min(overlay.clientWidth / w, overlay.clientHeight / h) || 1;
+  const lw = 1.5 * k;
+  octx.font = `600 ${lw * 9}px system-ui, sans-serif`;
+  for (const t of st.tracks) {
+    if (t.seenAt !== st.lastFrameAt) continue;
+    const cls = Object.entries(t.classes).sort((a, b) => b[1] - a[1])[0][0];
+    const [x1, y1, x2, y2] = t.box;
+    const confirmed = t.counted;
+    octx.strokeStyle = COLORS[cls] || "#fff";
+    octx.lineWidth = confirmed ? lw * 1.6 : lw;
+    octx.setLineDash(confirmed ? [] : [lw * 4, lw * 3]);
+    octx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    const label = `${st.cfg.adlar[cls] || cls}${confirmed ? "" : "?"}`;
+    const tw = octx.measureText(label).width;
+    octx.fillStyle = "rgba(0,0,0,.65)";
+    octx.fillRect(x1, Math.max(0, y1 - lw * 12), tw + lw * 4, lw * 12);
+    octx.fillStyle = "#fff";
+    octx.fillText(label, x1 + lw * 2, Math.max(lw * 9, y1 - lw * 3));
+  }
+}
+
+function showHud() {
+  $("hudFps").textContent = `${st.fps.toFixed(1)} kare/sn · ${st.provider}`;
+  const p = freshPos();
+  $("hudGps").textContent = p ? `Konum ±${Math.round(p.acc)} m` : "Konum yok";
+  $("hudGps").className = "chip" + (p && p.acc <= 30 ? "" : " warn");
+  const sp = p && p.speed != null && !st.fromFile ? Math.round(p.speed * 3.6) : null;
+  $("hudSpeed").hidden = sp == null;
+  if (sp != null) $("hudSpeed").textContent = `${sp} km/sa`;
+}
+
+// ---------- Döngü ----------
+const video = $("video");
+
+async function loop() {
+  if (!st.running) return;
+  if (video.readyState >= 2 && video.videoWidth) {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (frame.width !== w || frame.height !== h) { frame.width = w; frame.height = h; }
+    const t0 = performance.now();
+    fctx.drawImage(video, 0, 0, w, h);
+    const meta = toTensor(w, h);
+    try {
+      const out = await st.session.run({ [st.session.inputNames[0]]: meta.tensor });
+      const dets = decode(out[st.session.outputNames[0]], meta, w, h);
+      const now = Date.now();
+      st.lastFrameAt = now;
+      const improved = updateTracks(dets, now);
+      if (improved.length) {
+        // En iyi kare tam çözünürlükte saklanır; gönderilene kadar telefondan çıkmaz
+        const bmp = await createImageBitmap(frame);
+        for (const t of improved) t.best.bitmap = improved.length > 1 ? await createImageBitmap(bmp) : bmp;
+        if (improved.length > 1) bmp.close();
+      }
+      closeLostTracks(now);
+      draw(w, h);
+    } catch (e) {
+      console.error(e);
+      addEvent("Tespit hatası: " + e.message, "warn");
+    }
+    const dt = performance.now() - t0;
+    st.fps = st.fps ? 0.85 * st.fps + 0.15 * (1000 / dt) : 1000 / dt;
+    showHud();
+  }
+  requestAnimationFrame(loop);
+}
+
+async function start(file) {
+  st.source = document.querySelector("input[name=source]:checked").value;
+  if ($("sourceCard").hidden) st.source = "vatandas";
+  st.fromFile = !!file;
+  try {
+    if (file) {
+      video.srcObject = null;
+      video.src = URL.createObjectURL(file);
+      video.loop = false;
+    } else {
+      st.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+      });
+      video.srcObject = st.stream;
+    }
+    await video.play();
+  } catch (e) {
+    return setStatus($("modelStatus"), "Kamera açılamadı: " + (e.name === "NotAllowedError" ? "izin verilmedi." : e.message), "err");
+  }
+  $("setup").hidden = $("foot").hidden = true;
+  document.querySelector("header").hidden = true;
+  $("live").hidden = false;
+  st.running = true;
+  keepAwake();
+  addEvent(file ? "Video taranıyor." : "Tarama başladı.");
+  loop();
+}
+
+function stop() {
+  st.running = false;
+  closeLostTracks(Date.now(), true);
+  st.stream?.getTracks().forEach((t) => t.stop());
+  st.stream = null;
+  video.pause();
+  st.wakeLock?.release().catch(() => {});
+  st.wakeLock = null;
+  $("stop").textContent = "Yeni tarama";
+  $("stop").onclick = () => location.reload();
+  addEvent(`Tarama bitti: ${st.seen} hasar görüldü${st.queue.length || st.sending ? "; kalan kareler gönderiliyor" : ""}.`);
+}
+
+async function keepAwake() {
+  try { st.wakeLock = await navigator.wakeLock?.request("screen"); } catch { /* desteklenmiyor */ }
+}
+
+document.addEventListener("visibilitychange", () => { if (st.running && document.visibilityState === "visible") keepAwake(); });
+video.addEventListener("ended", () => { if (st.running) stop(); });
+$("consent").addEventListener("change", refresh);
+$("startCam").addEventListener("click", () => start(null));
+$("pickVideo").addEventListener("click", () => $("videoFile").click());
+$("videoFile").addEventListener("change", (e) => { if (e.target.files[0]) start(e.target.files[0]); });
+$("stop").onclick = stop;
+fetch("/api/oturum").then((r) => r.json()).then((s) => { $("sourceCard").hidden = !s.kullanici; }).catch(() => {});
+
+watchLocation();
+loadModel();
+</script>
+</body>
+</html>
