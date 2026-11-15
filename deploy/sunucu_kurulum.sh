@@ -8,6 +8,10 @@ set -euo pipefail
 REPO="${REPO:-https://github.com/mahmutsamiseyhan/yol-hasar-tespit.git}"
 DIR=/opt/yol-hasar-tespit
 DOMAIN="${DOMAIN:?DOMAIN gerekli, ör. DOMAIN=1-2-3-4.sslip.io}"
+# Komut bir sohbetten/belgeden kopyalanınca adresler "[www.ornek.com](https://www.ornek.com)" biçiminde gelebilir: düz adrese çevir
+clean() { echo "$1" | sed -E 's/\[([^]]*)\]\([^)]*\)/\1/g'; }
+DOMAIN="$(clean "$DOMAIN")"
+[ -n "${PUBLIC_URL:-}" ] && PUBLIC_URL="$(clean "$PUBLIC_URL")"
 FIRST_HOST="$(echo "$DOMAIN" | cut -d, -f1 | tr -d ' ')"
 PUBLIC_URL="${PUBLIC_URL:-https://$FIRST_HOST}"
 
@@ -51,9 +55,12 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(old ADMIN_PASSWORD)}"
 NEW_PASSWORD=0
 if [ -z "$ADMIN_PASSWORD" ]; then ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=')"; NEW_PASSWORD=1; fi
 SECRET_KEY="$(old SECRET_KEY)"; SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}"
+# Ek personel hesapları (ör. Raspberry Pi aracı): bir kez ADMIN_USERS='ad:özet,...' ile verilir, sonraki güncellemelerde korunur.
+# Özet (şifre değil) yazılması önerilir: python -m app.auth
+ADMIN_USERS="${ADMIN_USERS:-$(old ADMIN_USERS)}"
 umask 077
-printf "DOMAIN='%s'\nPUBLIC_URL='%s'\nADMIN_PASSWORD='%s'\nSECRET_KEY='%s'\n" \
-  "$DOMAIN" "$PUBLIC_URL" "$ADMIN_PASSWORD" "$SECRET_KEY" > "$ENV_FILE"
+printf "DOMAIN='%s'\nPUBLIC_URL='%s'\nADMIN_PASSWORD='%s'\nSECRET_KEY='%s'\nADMIN_USERS='%s'\n" \
+  "$DOMAIN" "$PUBLIC_URL" "$ADMIN_PASSWORD" "$SECRET_KEY" "$ADMIN_USERS" > "$ENV_FILE"
 umask 022
 
 echo "==> Uygulama ve HTTPS başlatılıyor (ilk derleme birkaç dakika sürer)"
