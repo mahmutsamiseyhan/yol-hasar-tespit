@@ -90,6 +90,26 @@
   .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 12px; line-height: 1.8; }
   .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
   .popup { width: 280px; } .popup h3 { margin: 0 0 4px; font-size: 14px; }
+  /* Telefonda kayıt kartı: haritayı kaplayan pencere yerine alttan açılan, büyüyüp küçülen kart */
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1050; background: var(--panel); border-radius: 16px 16px 0 0;
+    box-shadow: 0 -6px 24px rgba(15,23,35,.28); display: flex; flex-direction: column; max-height: 82vh;
+    padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .sheet[hidden] { display: none; }
+  .sheet-grip { display: flex; justify-content: center; padding: 8px 0 6px; touch-action: none; cursor: grab; }
+  .sheet-grip span { width: 42px; height: 5px; border-radius: 3px; background: #c5ccd5; }
+  .sheet-head { display: grid; grid-template-columns: 58px 1fr auto; gap: 12px; align-items: center; padding: 0 14px 10px;
+    touch-action: none; cursor: pointer; }
+  .sheet-head img { width: 58px; height: 58px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+  .sheet-head .t { font-weight: 700; font-size: 15px; line-height: 1.25; }
+  .sheet-head .m { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .sheet-close { border: 0; background: none; font-size: 26px; line-height: 1; padding: 2px 8px; color: var(--muted); align-self: start; }
+  .sheet-body { display: none; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 12px; border-top: 1px solid var(--line); }
+  .sheet.open .sheet-body { display: block; }
+  .sheet-body .popup { width: auto; }
+  .sheet-body .popup img { max-height: 36vh; object-fit: contain; background: var(--bg); }
+  .sheet-body .actions button { font-size: 14px; padding: 9px 12px; }
+  .sheet-more { margin: 0 14px 12px; padding: 9px; font-weight: 600; color: var(--brand); }
+  .sheet.open .sheet-more { margin-top: 0; }
   .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .ba figure { margin: 0; min-width: 0; }
   .ba img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); margin: 4px 0 0; display: block; }
@@ -271,6 +291,17 @@
   </div>
 </div>
 
+<div class="sheet" id="sheet" hidden role="dialog" aria-label="Arıza kartı">
+  <div class="sheet-grip" id="sheetGrip"><span></span></div>
+  <div class="sheet-head" id="sheetHead">
+    <img id="sheetThumb" alt="">
+    <div><div class="t" id="sheetTitle"></div><div class="m" id="sheetMeta"></div></div>
+    <button class="sheet-close" id="sheetClose" type="button" aria-label="Kartı kapat">×</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+  <button class="sheet-more" id="sheetMore" type="button">Ayrıntılar ve işlemler ▲</button>
+</div>
+
 <div class="modal" id="manageModal" hidden>
   <div class="modal-box mid">
     <div class="modal-head"><h2 class="mt grow">Kayıt yönetimi</h2><button type="button" data-close="manageModal">Kapat</button></div>
@@ -418,6 +449,15 @@ function repairBlock(p) {
 
 function popupHtml(f) {
   const p = f.properties;
+  return `<div class="popup">
+    <h3>${esc(p.hasar_adi)} <small style="color:#5f6b7a">${esc(p.hasar_sinifi)}</small></h3>
+    ${badge(p.oncelik_seviyesi, p.oncelik_puani)}
+    ${popupBody(f)}
+  </div>`;
+}
+
+function popupBody(f) {
+  const p = f.properties;
   const pois = (p.yakin_kritik_tesisler || []).map((t) => `${esc(t.tur)} ${t.ad ? "(" + esc(t.ad) + ")" : ""} ${t.mesafe_m} m`).join("<br>");
   const closed = p.durum === "onarildi" || p.durum === "yanlis_tespit";
   const actions = closed
@@ -427,10 +467,7 @@ function popupHtml(f) {
        <button onclick="openRepair(${p.id})">Onarıldı (fotoğrafla)</button>
        <button onclick="setStatus(${p.id}, 'yanlis_tespit')">Yanlış tespit</button>
        <button onclick="openManage(${p.id})">Yönet</button>`;
-  return `<div class="popup">
-    <h3>${esc(p.hasar_adi)} <small style="color:#5f6b7a">${esc(p.hasar_sinifi)}</small></h3>
-    ${badge(p.oncelik_seviyesi, p.oncelik_puani)}
-    ${p.durum === "onarildi" ? repairBlock(p) : (p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Tespit görseli">` : "")}
+  return `${p.durum === "onarildi" ? repairBlock(p) : (p.goruntu_url ? `<img src="${esc(p.goruntu_url)}" alt="Tespit görseli">` : "")}
     <div class="kv">
       <span>İş emri</span><span>${esc(p.is_emri_no)}</span>
       <span>Durum</span><span>${STATUS_TR[p.durum] || esc(p.durum)}</span>
@@ -442,8 +479,7 @@ function popupHtml(f) {
       <span>Açılış</span><span>${esc(fmtDate(p.olusturma))}</span>
       <span>Skor</span><span style="font-size:12px">${scoreDetail(p.skor_detayi)}</span>
     </div>
-    <div class="actions">${actions}</div>
-  </div>`;
+    <div class="actions">${actions}</div>`;
 }
 
 // ---------- Filtre ----------
@@ -484,11 +520,18 @@ async function loadIssues() {
       radius: 7 + Math.min(10, Math.log2(p.bildirim_sayisi) * 3),
       color: "#fff", weight: 2,
       fillColor: closed ? "#9aa5b1" : LEVEL_COLORS[p.oncelik_seviyesi], fillOpacity: closed ? 0.5 : 0.9,
-    }).bindPopup(popupHtml(f), { maxWidth: 310 });
+      bubblingMouseEvents: false,   // işarete dokunmak haritaya "boş yere dokundu" diye geçmesin (kart kapanmasın)
+    });
+    m.feature = f;
+    if (isPhone()) m.on("click", () => openSheet(f));
+    else m.bindPopup(popupHtml(f), { maxWidth: 310 });
     m.addTo(layer);
     markers[p.id] = m;
     features[p.id] = f;
     if (!closed) open.push(f);
+  }
+  if (sheetId != null) {   // açık kart yenilenen veriyle güncellensin; kayıt kalktıysa kapansın
+    if (features[sheetId]) fillSheet(features[sheetId]); else closeSheet();
   }
   $("count").textContent = `${fc.features.length} kayıt`;
   renderQueue(open);
@@ -523,7 +566,7 @@ function renderQueue(list) {
     }
     const m = markers[id];
     showMapOnPhone();
-    map.setView(m.getLatLng(), 17); m.openPopup();
+    map.setView(m.getLatLng(), 17); openMarker(m);
   }));
   updateQBar();
 }
@@ -585,7 +628,7 @@ async function loadStats() {
 
 async function setStatus(id, durum) {
   await api(`/api/issues/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ durum }) });
-  map.closePopup();
+  map.closePopup(); closeSheet();
   loadIssues();
 }
 
@@ -594,7 +637,7 @@ let repairId = null;
 function openRepair(id) {
   repairId = id;
   const p = features[id].properties;
-  map.closePopup();
+  map.closePopup(); closeSheet();
   $("repairInfo").textContent = `${p.is_emri_no} · ${p.hasar_adi} · ${p.yol_adi || ROAD_TR[p.yol_sinifi] || ""}`;
   $("repairForm").reset(); $("repairForm").hidden = false;
   $("repairPreview").hidden = true; $("repairResult").innerHTML = "";
@@ -674,6 +717,53 @@ const MODE_TR = { "tam_kare": "Tam kare", "tam_kare+yol_bolgesi": "Tam kare + yo
 const pct = (v) => `%${Math.round(v * 100)}`;
 let analysisMarker = null;
 
+// ---------- Telefonda arıza kartı ----------
+// Haritayı kaplayan pencere yerine alttan açılır. Küçükken yalnızca özet (fotoğraf, tür, öncelik, durum);
+// başlığa dokunmak ya da yukarı kaydırmak ayrıntıları ve işlemleri açar, aşağı kaydırmak küçültür/kapatır.
+const isPhone = () => window.matchMedia("(max-width: 860px)").matches;
+let sheetId = null;
+function openMarker(m) {
+  if (m.feature && isPhone()) openSheet(m.feature); else m.openPopup();
+}
+function fillSheet(f) {
+  const p = f.properties;
+  $("sheetThumb").src = p.goruntu_url || ""; $("sheetThumb").hidden = !p.goruntu_url;
+  $("sheetTitle").textContent = p.hasar_adi;
+  $("sheetMeta").innerHTML = `${badge(p.oncelik_seviyesi, p.oncelik_puani)}<span>${esc(p.is_emri_no)}</span><span>${STATUS_TR[p.durum] || esc(p.durum)}</span>`;
+  $("sheetBody").innerHTML = `<div class="popup">${popupBody(f)}</div>`;
+}
+function openSheet(f, expand = false) {
+  sheetId = f.properties.id;
+  fillSheet(f);
+  setSheet(expand);
+  $("sheet").hidden = false;
+}
+function setSheet(open) {
+  $("sheet").classList.toggle("open", open);
+  $("sheetMore").textContent = open ? "Küçült ▼" : "Ayrıntılar ve işlemler ▲";
+  if (open) $("sheetBody").scrollTop = 0;
+}
+function closeSheet() { sheetId = null; $("sheet").hidden = true; $("sheet").classList.remove("open"); }
+$("sheetClose").onclick = (e) => { e.stopPropagation(); closeSheet(); };
+$("sheetMore").onclick = () => setSheet(!$("sheet").classList.contains("open"));
+$("sheetHead").addEventListener("click", () => setSheet(!$("sheet").classList.contains("open")));
+let sheetY = null;
+for (const el of [$("sheetGrip"), $("sheetHead")]) {
+  el.addEventListener("touchstart", (e) => { sheetY = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (sheetY == null) return;
+    const dy = e.changedTouches[0].clientY - sheetY; sheetY = null;
+    if (Math.abs(dy) < 30) return;               // kısa dokunuş: tıklama olarak işlenir
+    e.preventDefault();                          // kaydırma sonrası "tıklama" da gelmesin
+    const open = $("sheet").classList.contains("open");
+    if (dy < 0) setSheet(true);                  // yukarı: büyüt
+    else if (open) setSheet(false);              // aşağı: önce küçült
+    else closeSheet();                           // küçükken aşağı: kapat
+  });
+}
+map.on("click", closeSheet);                     // haritada boş yere dokunmak kartı kapatır
+window.addEventListener("resize", () => { if (!isPhone()) closeSheet(); });
+
 // Telefonda harita sayfanın üstünde: kuyruktan ya da formdan sonra haritaya kaydır
 function showMapOnPhone() {
   if (window.matchMedia("(max-width: 860px)").matches) $("map").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -682,8 +772,8 @@ function showMapOnPhone() {
 function flyAndOpen(latlng, layer) {
   showMapOnPhone();
   // Harita zaten oradaysa uçuş olmaz ve "moveend" gelmez: pencereyi doğrudan aç
-  if (map.getZoom() === 17 && map.getCenter().distanceTo(latlng) < 5) { layer.openPopup(); return; }
-  map.once("moveend", () => layer.openPopup());
+  if (map.getZoom() === 17 && map.getCenter().distanceTo(latlng) < 5) { openMarker(layer); return; }
+  map.once("moveend", () => openMarker(layer));
   map.flyTo(latlng, 17, { duration: 0.8 });
 }
 
@@ -778,7 +868,7 @@ function manageMsg(text, kind = "ok") { $("mMsg").innerHTML = text ? `<div class
 
 async function openManage(id, focus) {
   manageId = id;
-  map.closePopup();
+  map.closePopup(); closeSheet();
   manageMsg("");
   $("mNote").value = ""; $("mReason").value = "";
   disarmDelete();
@@ -851,7 +941,7 @@ async function loadHistory() {
     const m = markers[tr.dataset.id];
     if (!m) return;
     $("historyModal").hidden = true;
-    showMapOnPhone(); map.setView(m.getLatLng(), 17); m.openPopup();
+    showMapOnPhone(); map.setView(m.getLatLng(), 17); openMarker(m);
   }));
 }
 $("openHistory").onclick = async () => { $("historyModal").hidden = false; await loadHistory(); };
@@ -1067,7 +1157,7 @@ let popupOpen = false;
 map.on("popupopen", () => (popupOpen = true));
 map.on("popupclose", () => (popupOpen = false));
 setInterval(async () => {
-  if (document.hidden || popupOpen || !$("repairModal").hidden || !$("manageModal").hidden) return;
+  if (document.hidden || popupOpen || sheetId != null || !$("repairModal").hidden || !$("manageModal").hidden) return;
   try { await loadIssues(); } catch (_) { /* bağlantı geçici olarak koptuysa sonraki turda tekrar dener */ }
 }, 15000);
 
